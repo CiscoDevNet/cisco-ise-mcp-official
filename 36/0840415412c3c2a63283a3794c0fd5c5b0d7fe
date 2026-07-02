@@ -1,0 +1,26 @@
+docs/superpowers/specs/2026-07-02-ise-deployment-health-design.md
+  s_58c6c4ce2f783c::t_426734585b78e6 1-54,59-115,120-195
+  s_58c6c4ce2f783c::t_fcc2c8cbd1b7b5 55-58
+  s_58c6c4ce2f783c::t_0ad904a511f44e 116-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "360840415412c3c2a63283a3794c0fd5c5b0d7fe",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_58c6c4ce2f783c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83002f04-e9c8-495f-b139-8c225b75fc08",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
