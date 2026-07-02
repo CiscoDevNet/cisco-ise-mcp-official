@@ -1,0 +1,39 @@
+server.py
+  s_c1fed4204c468f::t_1ac1b55c618f49 61-64
+  s_c1fed4204c468f::t_014ee2461b7dfd 86-89
+  s_c1fed4204c468f::t_c59ef61a6e733f 11-12
+clients/settings.py
+  s_c1fed4204c468f::t_1e07c938403bdd 53-55
+  s_c1fed4204c468f::t_4ae6f2246bf18c 83-100
+clients/ise_web_session.py
+  s_c1fed4204c468f::t_c5900fafa2f6ad 1-188
+services/log_service.py
+  s_c1fed4204c468f::t_7d4d9141b22f5b 1-191
+tests/test_ise_web_session.py
+  s_c1fed4204c468f::t_a1826340c609d8 1-160
+tests/test_log_service.py
+  s_c1fed4204c468f::t_00075236d1856d 1-298
+tests/test_settings_log_fields.py
+  s_c1fed4204c468f::t_25ab0c7df7eb6e 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "7f3693b6affb792325ecd6f4094d3566721adf7a",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_c1fed4204c468f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "20bc4048-432b-4d37-9772-c4cc8c6cfbd4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
