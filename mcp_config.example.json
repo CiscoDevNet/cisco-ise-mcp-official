@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ise-mcp": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp/",
+      "headers": {
+        "X-ISE-Authorization": "Basic <base64(username:password)>"
+      }
+    }
+  }
+}

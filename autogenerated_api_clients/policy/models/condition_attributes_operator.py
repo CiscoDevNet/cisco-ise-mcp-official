@@ -1,0 +1,37 @@
+from enum import Enum
+
+class ConditionAttributesOperator(str, Enum):
+    CONTAINS = "contains"
+    DATEGREATERTHAN = "dateGreaterThan"
+    DATELESSTHAN = "dateLessThan"
+    ENDSWITH = "endsWith"
+    EQUALS = "equals"
+    GREATEROREQUALS = "greaterOrEquals"
+    GREATERTHAN = "greaterThan"
+    IN = "in"
+    IPEQUALS = "ipEquals"
+    IPGREATERTHAN = "ipGreaterThan"
+    IPLESSTHAN = "ipLessThan"
+    IPNOTEQUALS = "ipNotEquals"
+    LESSOREQUALS = "lessOrEquals"
+    LESSTHAN = "lessThan"
+    MACCONTAINS = "macContains"
+    MACENDSWITH = "macEndsWith"
+    MACEQUALS = "macEquals"
+    MACIN = "macIn"
+    MACNOTCONTAINS = "macNotContains"
+    MACNOTENDSWITH = "macNotEndsWith"
+    MACNOTEQUALS = "macNotEquals"
+    MACNOTIN = "macNotIn"
+    MACNOTSTARTSWITH = "macNotStartsWith"
+    MACSTARTSWITH = "macStartsWith"
+    MATCHES = "matches"
+    NOTCONTAINS = "notContains"
+    NOTENDSWITH = "notEndsWith"
+    NOTEQUALS = "notEquals"
+    NOTIN = "notIn"
+    NOTSTARTSWITH = "notStartsWith"
+    STARTSWITH = "startsWith"
+
+    def __str__(self) -> str:
+        return str(self.value)

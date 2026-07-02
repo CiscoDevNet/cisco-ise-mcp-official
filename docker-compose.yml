@@ -1,0 +1,29 @@
+# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+#
+# Run:
+#   docker compose up
+#
+# Development mode with debug:
+#   DEV=true DEBUG=true docker compose up --build
+
+services:
+  ise-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        DEV: "${DEV:-false}"
+        DEBUG: "${DEBUG:-false}"
+    image: ise-mcp-server
+    container_name: ise-mcp-server
+    ports:
+      - "5000:5000"
+    # MCP's MnT and Deployment-API calls target the local ISE PAN over
+    # the bridge network. host.docker.internal:host-gateway resolves
+    # to the container's host so the hardcoded _PAN_HOST_FOR_MNT in
+    # clients/mnt_client.py reaches the local PAN. Required.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    restart: unless-stopped

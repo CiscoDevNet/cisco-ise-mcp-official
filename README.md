@@ -1,14 +1,262 @@
-# devnet-template
-This provides a template repository for creating or importing repos in the CiscoDevNet organization on GitHub.com. 
+# Offical MCP Server for Cisco Identity Services Engine (ISE)
 
-Please use this template as a guide to creating a repo that encourages contributions and shows thoughtful maintenance strategies.  
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes Cisco ISE API operations as agent-callable tools over Streamable HTTP.
 
-The `CODE_OF_CONDUCT.md` reflects our standards for interaction. 
+## Overview
 
-The `CONTRIBUTING.md` file instructs new contributors on how to communicate with the project maintainers, report issues, provide pull requests, reviewing contributions, and how to version control releases.
+This server provides Cisco ISE tools for live session search, AAA failure
+investigation, access policy inspection (policy sets, authentication and
+authorization rules, authorization profiles, library conditions), certificate
+lookups, and deployment/node health. MCP-compatible clients can discover the
+tools, inspect their schemas, and call them from natural language prompts.
 
-The `LICENSE` file should contain the license you intend for the source code in the repo. 
+- **Protocol:** Streamable HTTP
+- **Default URL:** `http://localhost:5000/mcp/`
 
-The `SECURITY.md` file describes security policies and procedures including reporting a security-related bug and the policy on disclosure. 
+## Pre-requisites
 
-The `AGENTS.md` file contains a template for guiding AI agents that work with your repository.
+- Python 3.12
+- [uv](https://docs.astral.sh/uv/) package manager
+- Docker (optional)
+- Access to a Cisco ISE server
+
+## Quick Start
+
+### 1. Clone and Setup
+
+```bash
+git clone https://github.com/CiscoDevNet/cisco-ise-mcp-official.git
+cd cisco-ise-mcp-official
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your ISE credentials
+```
+
+### 2. Install Dependencies
+
+```bash
+uv sync
+```
+
+### 3. Run the Server
+
+**Without Docker:**
+```bash
+uv run server.py
+```
+
+**With Docker:**
+```bash
+docker compose up
+```
+
+**Development mode with debug:**
+```bash
+DEV=true DEBUG=true docker compose up --build
+```
+
+The server will be available at `http://localhost:5000`
+
+## Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `ISE_IP` | ISE PAN host/IP | — | Yes |
+| `API_PORT` | ISE PAN port | `443` | No |
+| `API_USERNAME` | ISE service-account username (fallback auth) | — | See below |
+| `API_PWD` | ISE service-account password (fallback auth) | — | See below |
+| `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
+| `PORT` | Port the MCP server listens on | `5000` | No |
+| `ISE_CREDENTIAL_HEADER_NAME` | Inbound header carrying the per-user ISE credential | `X-ISE-Authorization` | No |
+| `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of falling back to the service account | `false` | No |
+
+`API_USERNAME` / `API_PWD` are the **fallback** service-account credentials used
+when a request does not carry the per-user `X-ISE-Authorization` header. They are
+required unless every client sends that header (see [Authentication](#authentication));
+with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` they can be left empty.
+
+## API Endpoints
+
+The server uses the MCP **streamable-HTTP** transport. With the default `HOST`/`PORT`
+it listens on:
+
+- `http://localhost:5000/mcp/` - MCP protocol endpoint (streamable-HTTP)
+
+> The URL is derived from `HOST` and `PORT` in your `.env` (defaults `0.0.0.0` / `5000`).
+> If you change them, update the URLs in the client configs below accordingly.
+
+## Connecting MCP Clients
+
+Because this is an HTTP MCP server, any client that supports the streamable-HTTP
+transport can connect directly at the `/mcp/` endpoint. Start the server first
+(`uv run server.py` or `docker compose up`), then configure your client.
+
+### Claude Code
+
+Add the server with the CLI (recommended):
+
+```bash
+claude mcp add --transport http ise-mcp http://localhost:5000/mcp/
+```
+
+To pass a per-user ISE credential header (optional — see [Authentication](#authentication)):
+
+```bash
+claude mcp add --transport http ise-mcp http://localhost:5000/mcp/ \
+  --header "X-ISE-Authorization: Basic <base64(user:password)>"
+```
+
+Verify and inspect the connection:
+
+```bash
+claude mcp list
+claude mcp get ise-mcp
+```
+
+Alternatively, commit an `.mcp.json` at the project root so the server is shared
+with anyone who checks out the repo:
+
+```json
+{
+  "mcpServers": {
+    "ise-mcp": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp/"
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+Claude Desktop currently speaks stdio, so bridge to the HTTP server with
+[`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Edit
+`claude_desktop_config.json` (Settings → Developer → Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "ise-mcp": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:5000/mcp/"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving. To send the credential header, append
+`--header "X-ISE-Authorization: Basic <base64>"` to the `args` array.
+
+### Cursor / VS Code / other HTTP-capable clients
+
+Most editors that support MCP accept the same shape as `.mcp.json`. For Cursor,
+add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in the project):
+
+```json
+{
+  "mcpServers": {
+    "ise-mcp": {
+      "url": "http://localhost:5000/mcp/"
+    }
+  }
+}
+```
+
+### Authentication
+
+The server accepts an optional per-request `X-ISE-Authorization` header carrying a
+pre-built `Basic <base64(username:password)>` ISE credential. When a client does not
+send it, the server falls back to the service-account credentials from `.env`
+(`API_USERNAME` / `API_PWD`).
+
+- The header name is configurable via `ISE_CREDENTIAL_HEADER_NAME`.
+- Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
+  header instead of falling back to the service account.
+
+## Available Tools
+
+See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
+
+## Development
+
+### Development Setup
+
+Follow [Quick Start](#quick-start) steps 1 (Clone and Setup) and 2 (Install
+Dependencies) to get a working checkout. `uv sync` installs the `dev` dependency
+group as well, so no extra step is needed for the tooling below.
+
+### Running Tests
+
+```bash
+uv run pytest
+```
+
+### OpenAPI Clients
+
+ISE OpenAPI endpoints are consumed through typed clients generated from OpenAPI
+specs, rather than hand-written HTTP calls. The moving parts:
+
+| Path | Purpose |
+|------|---------|
+| `api_specs/*.yaml` \| `*.json` | OpenAPI specs (one per API area, e.g. `policy-bundled.yaml`) |
+| `api_client_config/*.yaml` | [`openapi-python-client`](https://github.com/openapi-generators/openapi-python-client) generator config (package name, version, options) |
+| `autogenerated_api_clients/` | Generated client packages — **checked in**, but treated as generated output |
+| `scripts/generate_api_clients.sh` | Regenerates every enabled client |
+
+
+#### Preparing a spec
+
+Specs are sourced from the official
+[Cisco ISE API framework](https://developer.cisco.com/docs/identity-services-engine/latest/cisco-ise-api-framework/),
+then trimmed to the operations the server actually calls and placed under
+`api_specs/`. If a source spec uses external `$ref`s, bundle it into a single
+self-contained file first — see [api_specs/README.md](api_specs/README.md) for
+the Redocly bundling steps.
+
+#### Generator config
+
+Each client needs a generator config under `api_client_config/` that sets the
+package name, version, and options. Use the existing
+[`api_client_config/policy.yaml`](api_client_config/policy.yaml) as a template.
+
+#### Generating the clients
+
+Each client is produced by an `openapi-python-client generate` invocation. Add a
+block for your new client to
+[`scripts/generate_api_clients.sh`](scripts/generate_api_clients.sh), following
+the existing policy block, so it is regenerated with the rest:
+
+```bash
+uv run openapi-python-client generate \
+  --path api_specs/<name>.yaml \
+  --config api_client_config/<name>.yaml \
+  --output-path ./autogenerated_api_clients/ \
+  --overwrite
+```
+
+Then regenerate all enabled clients by running the script:
+
+```bash
+./scripts/generate_api_clients.sh
+```
+
+## Project Structure
+
+```
+.
+├── api_client_config/    # API client configuration YAML files
+├── api_specs/            # OpenAPI specifications (JSON)
+├── clients/              # HTTP and database clients
+├── parsers/              # Response parsers
+├── tools/                # MCP tool handlers
+├── shared_libs/          # Shared utilities (timing, etc.)
+├── tests/                # Test files
+├── server.py             # Main server entry point
+├── main.py               # Alternative entry point
+└── docker-compose.yml    # Docker orchestration
+```
+
+## License
+
+See [LICENSE.md](/LICENSE.md) file for details.

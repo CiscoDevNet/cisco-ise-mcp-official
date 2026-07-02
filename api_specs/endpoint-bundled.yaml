@@ -1,0 +1,694 @@
+openapi: 3.0.2
+info:
+  version: 1.0.0
+  title: Cisco ISE API - Endpoint
+servers:
+  - url: https://{server}/v1/
+    variables:
+      server:
+        default: localhost
+        description: The host where the API is rooted
+security:
+  - BasicAuth: []
+paths:
+  /endpointTask:
+    post:
+      summary: Create Endpoint task
+      operationId: createEndPointTask
+      tags:
+        - endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAPIEndpoint'
+      responses:
+        '200':
+          description: Endpoint task successfully submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+          links:
+            GetBulkStatusById:
+              operationId: getBulkOperationStatus
+              parameters:
+                bulkId: $response.body#/id
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /endpoint:
+    get:
+      summary: Get all endpoints
+      operationId: getEndpoints
+      tags:
+        - endpoints
+      parameters:
+        - $ref: '#/components/parameters/pageNumber'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/sortType'
+        - $ref: '#/components/parameters/sortBy'
+        - $ref: '#/components/parameters/filtering'
+        - $ref: '#/components/parameters/filtertype'
+      responses:
+        '200':
+          description: A paged array of endpoints
+          headers:
+            x-next:
+              description: A link to the next page of responses
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Endpoints'
+        '400':
+          $ref: '#/components/responses/responses-BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultResponse'
+    post:
+      summary: Create Endpoint
+      operationId: createEndPoint
+      tags:
+        - endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAPIEndpoint'
+      responses:
+        '200':
+          description: Added endpoint successfully
+          content:
+            application/json:
+              schema:
+                type: string
+        '500':
+          description: Internal server error
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /endpoint/{value}:
+    get:
+      summary: Get endpoint by id or MAC
+      operationId: getEndpointById
+      tags:
+        - endpoints
+      parameters:
+        - name: value
+          in: path
+          required: true
+          description: The id or MAC of the endpoint
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAPIEndpoint'
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update Endpoint by id or mac
+      operationId: updateEndpoint
+      tags:
+        - endpoints
+      parameters:
+        - name: value
+          in: path
+          required: true
+          description: The id or MAC of the endpoint
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAPIEndpoint'
+      responses:
+        '200':
+          description: Updated endpoint successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAPIEndpoint'
+        '404':
+          description: Endpoint not found.
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete endpoint by id or mac
+      operationId: deleteEndpoint
+      tags:
+        - endpoints
+      parameters:
+        - name: value
+          in: path
+          required: true
+          description: The id or MAC of the endpoint
+          schema:
+            type: string
+      responses:
+        '200':
+          description: endpoint deleted successfully
+          content:
+            application/json:
+              schema:
+                type: string
+        '404':
+          description: Endpoint not found.
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /endpoint/bulk:
+    post:
+      summary: Create Endpoint in bulk
+      operationId: createBulkEndPoints
+      tags:
+        - endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Endpoints'
+      responses:
+        '200':
+          description: Added bulk endpoints successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+          links:
+            GetBulkStatusById:
+              operationId: getBulkOperationStatus
+              parameters:
+                bulkId: $response.body#/id
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Update Endpoint in bulk
+      description: |
+        We recommend that you update endpoint custom attribute data through this bulk update operation using OpenAPI instead of the pxGrid Context-In asset topic or the endpoint ERS API. (Use bulk create operation if endpoint does not already exist in Cisco ISE database.) 
+        <ul> 
+        __Limitations to using the pxGrid Context-In asset topic or the Endpoint ERS API__
+        </ul>
+        <ul>
+        pxGrid Context-In Asset topic
+        <ul>
+        <li>When Endpoint custom attribute updates come through pxGrid Context-In asset topic, the endpoints are reprofiled. But the custom attribute updates remain in the current PSN's cache and persist in the database only after 12 hours. Only changes to significant endpoint attributes results in immediate persistence to database. As a result, the authorization policies that use the revised custom attributes are not honored until the updates are persistent 12 hours later.</li>
+        </ul>
+        </ul>
+        <ul>
+        Endpoint ERS API
+        <ul>
+        <li>Updating endpoint custom attributes through ERS API does not trigger endpoint reprofiling. As a result, the profiler policies that contain the revised custom attributes are not honored.</li>
+          
+        <li>Endpoint ERS APIs provide a 2-step update for endpoints: use the GET operation to fetch the endpoint ID, and update the endpoint using the ID. These steps make the bulk update of endpoint data cumbersome.</li>
+        </ul>
+        <ul>
+        <li>In earlier releases of Cisco ISE you could not programmatically create or update custom attributes. These tasks required manual effort through the admin portal UI. Cisco ISE could then ingest the data through either Endpoint ERS API or the pxGrid Context-In asset topic.</li> 
+              
+        </ul>
+        </ul>
+        <ul>
+         __Solution__
+        </ul>    
+        <ul>
+        To address these limitations, Cisco ISE now provides -
+          
+        <ul>
+        <li>Endpoint CRUD operations with bulk create and update capabilities through Open API model which has a more efficient infrastructure for bulk operations compared to ERS API.</li>
+          
+        <li>Cisco ISE triggers endpoint reprofiling after an endpoint custom attribute is updated if __Custom Attribute for Profiling Enforcement__ is enabled in the admin portal UI in the __Work Centers > Profiler Settings__ page.</li>
+          
+        <li> You can programmatically create, read, update, and delete the custom attributes through Open APIs provided for Custom Attributes.</li>
+        </ul>
+        </ul>
+      operationId: updateBulkEndPoints
+      tags:
+        - endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Endpoints'
+      responses:
+        '200':
+          description: Updated bulk endpoints successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+          links:
+            GetBulkStatusById:
+              operationId: getBulkOperationStatus
+              parameters:
+                bulkId: $response.body#/id
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete Endpoint in bulk
+      operationId: deleteBulkEndPoints
+      tags:
+        - endpoints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkEndpoints'
+      responses:
+        '200':
+          description: Delete bulk endpoints successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+          links:
+            GetBulkStatusById:
+              operationId: getBulkOperationStatus
+              parameters:
+                bulkId: $response.body#/id
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /endpoint/deviceType/summary:
+    get:
+      summary: Get aggregate of device types
+      operationId: getDeviceTypeSummary
+      tags:
+        - endpoints
+      responses:
+        '200':
+          description: List of devicetypes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTypeSummary'
+        '400':
+          $ref: '#/components/responses/responses-BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultResponse'
+  /endpoint/getRejected:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Get all rejected endpoints
+      operationId: getRejectedEndpoints
+      tags:
+        - endpoints
+      responses:
+        '200':
+          $ref: '#/components/responses/SuppressedEndpointListResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /endpoint/releaseRejectedEndpoints:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    put:
+      summary: Release rejected endpoints by mac
+      operationId: updateReleaseRejectedEndpoints
+      description: Request body contains an array of mac identifiers. Each identifier should represent an endpoint to be released.
+      tags:
+        - endpoints
+      requestBody:
+        $ref: '#/components/requestBodies/IdentifierListRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/IdentifierListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+  requestBodies:
+    IdentifierListRequest:
+      description: Array of mac identifiers. Each identifier should represent an endpoint to be released.
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/IdentifierList'
+  responses:
+    SuppressedEndpointListResponse:
+      description: Response body contains array of mac identifiers. Each identifier represents a rejected endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SuppressedEndpointListResponseEntity'
+    IdentifierListResponse:
+      description: |-
+        Returns 200 if all the endpoints from the request body are released.
+        Response body contains array of mac identifiers. Each identifier represents a released endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/IdentifierListResponseEntity'
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: 400
+            message: Bad Request
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: 500
+            message: Internal server error
+    DefaultResponse:
+      description: Unexpected Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    responses-BadRequest:
+      description: Bad Request for this specified resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    OpenAPIEndpoint:
+      type: object
+      required:
+        - mac
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        customAttributes:
+          type: object
+          nullable: true
+          additionalProperties: true
+        mdmAttributes:
+          type: object
+          nullable: true
+          additionalProperties: true
+        groupId:
+          type: string
+        identityStore:
+          type: string
+        identityStoreId:
+          type: string
+        mac:
+          type: string
+        portalUser:
+          type: string
+        profileId:
+          type: string
+        ipAddress:
+          type: string
+        ipv6Address:
+          type: string
+        vendor:
+          type: string
+        productId:
+          type: string
+        serialNumber:
+          type: string
+        deviceType:
+          type: string
+        softwareRevision:
+          type: string
+        hardwareRevision:
+          type: string
+        protocol:
+          type: string
+        staticGroupAssignment:
+          type: boolean
+        staticProfileAssignment:
+          type: boolean
+        assetId:
+          type: string
+        assetName:
+          type: string
+        assetIpAddress:
+          type: string
+        assetVendor:
+          type: string
+        assetProductId:
+          type: string
+        assetSerialNumber:
+          type: string
+        assetDeviceType:
+          type: string
+        assetSwRevision:
+          type: string
+        assetHwRevision:
+          type: string
+        assetProtocol:
+          type: string
+        assetConnectedLinks:
+          type: object
+          nullable: true
+          additionalProperties: true
+        mfcInfoHardwareModel:
+          type: string
+        mfcInfoOperatingSystem:
+          type: string
+        mfcInfoEndpointType:
+          type: string
+        mfcInfoHardwareManufacturer:
+          type: string
+    DeviceTypeEntry:
+      type: object
+      properties:
+        deviceType:
+          type: string
+        total:
+          type: string
+    DeviceTypeSummary:
+      type: array
+      items:
+        $ref: '#/components/schemas/DeviceTypeEntry'
+    BriefEndpoint:
+      type: object
+      properties:
+        id:
+          type: string
+        mac:
+          type: string
+    BriefEndpoints:
+      type: array
+      items:
+        $ref: '#/components/schemas/BriefEndpoint'
+    Endpoints:
+      type: array
+      items:
+        $ref: '#/components/schemas/OpenAPIEndpoint'
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+    SuppressedEndpointListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuppressedEndpoint'
+          example:
+            - identifier: '00:11:22:33:44:55'
+              state: REJECTED
+            - identifier: 66-77-88-99-AA-BB
+              state: REJECTED
+            - identifier: 000000FFFFFF
+              state: REJECTED
+            - identifier: CCCC.CCDD.DDDD
+              state: REJECTED
+        version:
+          type: string
+          example: 1.0.0
+    SuppressedEndpoint:
+      type: object
+      description: ISE Suppressed Endpoint
+      required:
+        - identifier
+      properties:
+        identifier:
+          type: string
+          example: '00:11:22:33:44:55'
+        state:
+          type: string
+          enum:
+            - RELEASED
+            - SUPPRESSED
+            - REJECTED
+          example: REJECTED
+    IdentifierListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        response:
+          $ref: '#/components/schemas/IdentifierList'
+        version:
+          type: string
+          example: 1.0.0
+    IdentifierList:
+      type: object
+      description: Array of mac identifiers. Each identifier represents an endpoint.
+      nullable: false
+      required:
+        - identifiers
+      properties:
+        identifiers:
+          type: array
+          description: Endpoint MAC address
+          nullable: false
+          items:
+            $ref: '#/components/schemas/identifier'
+          example:
+            - '00:11:22:33:44:55'
+            - 66-77-88-99-AA-BB
+            - 000000FFFFFF
+            - CCCC.CCDD.DDDD
+    BulkEndpoints:
+      type: object
+      properties:
+        endpoints:
+          type: array
+          items:
+            type: string
+    ResourceStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        failure_reason:
+          type: string
+    identifier:
+      type: string
+      pattern: ^([0-9A-Fa-f]{2}([.:-]?(?!$)|$)){6}$
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+  parameters:
+    XRequestIdHeader:
+      in: header
+      name: X-Request-ID
+      description: request Id, will return in the response headers, and appear in logs
+      schema:
+        type: string
+      required: false
+    pageNumber:
+      name: page
+      in: query
+      description: Page number
+      required: false
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    pageSize:
+      name: size
+      in: query
+      description: Number of objects returned per page
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        exclusiveMinimum: true
+        maximum: 1000
+        exclusiveMaximum: false
+        multipleOf: 10
+        default: 100
+    sortType:
+      name: sort
+      in: query
+      description: sort type - asc or desc
+      required: false
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+        default: asc
+    sortBy:
+      name: sortBy
+      in: query
+      description: sort column by which objects needs to be sorted
+      required: false
+      schema:
+        type: string
+    filtering:
+      name: filter
+      in: query
+      required: false
+      description: '<div> <style type="text/css" scoped> .apiServiceTable td, .apiServiceTable th { padding: 5px 10px !important; text-align: left; } </style> <span> <b>Simple filtering</b> should be available through the filter query string parameter. The structure of a filter is a triplet of field operator and value separated with dots. More than one filter can be sent. The logical operator common to ALL filter criteria will be by default AND, and can be changed by using the <i>"filterType=or"</i> query string parameter. Each resource Data model description should specify if an attribute is a filtered field. </span> <br /> <table class="apiServiceTable"> <thead> <tr> <th>OPERATOR</th> <th>DESCRIPTION</th> </tr> </thead> <tbody> <tr> <td>EQ</td> <td>Equals</td> </tr> <tr> <td>NEQ</td> <td>Not Equals</td> </tr> <tr> <td>GT</td> <td>Greater Than</td> </tr> <tr> <td>LT</td> <td>Less Then</td> </tr> <tr> <td>STARTSW</td> <td>Starts With</td> </tr> <tr> <td>NSTARTSW</td> <td>Not Starts With</td> </tr> <tr> <td>ENDSW</td> <td>Ends With</td> </tr> <tr> <td>NENDSW</td> <td>Not Ends With</td> </tr> <tr> <td>CONTAINS</td> <td>Contains</td> </tr> <tr> <td>NCONTAINS</td> <td>Not Contains</td> </tr> </tbody> </table> </div>'
+      schema:
+        type: array
+        items:
+          type: string
+      style: form
+      allowReserved: true
+    filtertype:
+      name: filterType
+      in: query
+      description: The logical operator common to ALL filter criteria will be by default AND, and can be changed by using the parameter
+      required: false
+      schema:
+        type: string
+        enum:
+          - AND
+          - OR
+        default: AND
