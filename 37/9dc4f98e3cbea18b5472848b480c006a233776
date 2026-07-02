@@ -1,0 +1,27 @@
+tests/test_input_validators.py
+  s_2583ea89492772::t_c03e2877975cb1 402-451
+utils/input_validators.py
+  s_2583ea89492772::t_a89574291b5a57 65-86
+  s_2583ea89492772::t_b2c867e26e9640 10-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "379dc4f98e3cbea18b5472848b480c006a233776",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_2583ea89492772": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a072ca96-6a2c-4b79-bf34-8f84237c4e99",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
