@@ -1,0 +1,30 @@
+tests/test_log_service.py
+  s_f96ef50373214a::t_4c9ef2636925ca 170
+  s_f96ef50373214a::t_2afcffc16cc76d 263
+  s_f96ef50373214a::t_62fe8d81c58e79 189
+  s_f96ef50373214a::t_39e980d75e3cac 207
+  s_f96ef50373214a::t_9cff5b3b7ea7d0 273
+services/log_service.py
+  s_f96ef50373214a::t_1127c319100e1d 169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "2f3c1fd1a9f944bb4860ff50ed05db400d501a5f",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_f96ef50373214a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9478fe4-976a-42db-8f28-ed32f9f6fd4d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
