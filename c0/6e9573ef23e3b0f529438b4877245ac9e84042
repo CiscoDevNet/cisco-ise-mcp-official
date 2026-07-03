@@ -1,0 +1,26 @@
+tests/test_deployment_models.py
+  s_b3a4105c4af1e1::t_9ef7832679fe41 149-190
+models/deployment_models.py
+  s_b3a4105c4af1e1::t_33dd3e61e48892 52-58,60-65,67-75,78-79,88,90-98,124-141,146,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "c06e9573ef23e3b0f529438b4877245ac9e84042",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_b3a4105c4af1e1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9e621c80-99c5-46fe-966a-01d5afe35f8e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
