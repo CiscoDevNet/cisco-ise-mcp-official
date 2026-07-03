@@ -1,0 +1,25 @@
+docs/superpowers/specs/2026-07-03-log-backed-system-stats-design.md
+  s_f96ef50373214a::t_1fd0a545d41321 1-226,229-231,233-248,258-362
+  s_f96ef50373214a::t_012406aea7deba 227-228,232,249-257
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "47b08cf6e22f8bfd8b7141fcb7542288a94c26d1",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_f96ef50373214a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9478fe4-976a-42db-8f28-ed32f9f6fd4d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
