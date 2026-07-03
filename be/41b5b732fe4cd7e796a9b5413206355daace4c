@@ -1,0 +1,28 @@
+tests/test_deployment_diagnostics_resolver.py
+  s_40c090acff0d21::t_04a0bb5da2ebf9 4,6-8,14-15,17,20,25-35,37-44,46-49,51,53-54,57-59,63-76,79-83,85-97,99-100,102-114,117-118,120-168,170-182
+services/deployment_diagnostics_resolver.py
+  s_40c090acff0d21::t_9a98f3e876223b 5-11,14-16,18-19,22-23,27-61,85-106
+tools/deployment_tool_handler.py
+  s_40c090acff0d21::t_8c827f0d9f1b7f 79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.9",
+  "base_commit_sha": "be41b5b732fe4cd7e796a9b5413206355daace4c",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_40c090acff0d21": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f37efaf2-2ba0-4c07-93fd-2358bc9be974",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
