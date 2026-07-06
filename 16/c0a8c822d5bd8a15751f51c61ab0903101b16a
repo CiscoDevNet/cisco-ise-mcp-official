@@ -1,0 +1,30 @@
+tests/test_certificates_tool_handler.py
+  s_8587f9dfbeeffc::t_6b7f70e9d7c068 161,167
+  s_8587f9dfbeeffc::t_5785270db9ac1c 314-398
+tools/certificates_tool_handler.py
+  s_8587f9dfbeeffc::t_a9d797cbb96034 15-16,20
+  s_8587f9dfbeeffc::t_d39158c169680b 272-311
+  s_8587f9dfbeeffc::t_7cd4c73da2b4ec 142-146,148
+  s_8587f9dfbeeffc::t_0e2bec00e585c8 118-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "16c0a8c822d5bd8a15751f51c61ab0903101b16a",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_8587f9dfbeeffc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f782ac84-de9c-49a3-8485-8e7973c9f565",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
