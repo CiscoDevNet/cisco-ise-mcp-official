@@ -1,0 +1,28 @@
+resources/ise_glossary.py
+  s_8587f9dfbeeffc::t_6aace75d8b8181 117-136
+  s_8587f9dfbeeffc::t_e4460a9130faf4 148
+tests/test_ise_glossary.py
+  s_8587f9dfbeeffc::t_397b370a6b85df 15-16
+  s_8587f9dfbeeffc::t_6402d870906757 167-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b0adf220184104a970f25107737fcd926ede95ff",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_8587f9dfbeeffc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f782ac84-de9c-49a3-8485-8e7973c9f565",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
