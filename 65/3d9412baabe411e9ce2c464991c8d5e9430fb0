@@ -1,0 +1,24 @@
+MCP_TOOLS_CATALOG.md
+  s_15a54371973e0f::t_8cec10a8fedcea 1020
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "653d9412baabe411e9ce2c464991c8d5e9430fb0",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_15a54371973e0f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8107167-53aa-42b5-9b04-415515e703bb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
