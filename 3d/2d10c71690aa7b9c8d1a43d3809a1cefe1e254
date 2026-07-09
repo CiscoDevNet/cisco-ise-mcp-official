@@ -1,0 +1,119 @@
+tests/test_session_tools.py
+  s_22a7af17f3b9df::t_be18112487bd2f 200-210
+  s_22a7af17f3b9df::t_79f5651e2daa1d 237-247
+  s_22a7af17f3b9df::t_4b949206f8b2eb 236
+  s_22a7af17f3b9df::t_8240174085470f 248
+models/session_models.py
+  s_22a7af17f3b9df::t_fbaf29df55df00 19-22
+  s_421cd2800f6066::t_15466c0265e9ba 4
+  s_421cd2800f6066::t_26c22aa2d78d16 12
+  s_421cd2800f6066::t_076a095689528a 6
+  s_421cd2800f6066::t_e742a413ed6772 42
+  s_421cd2800f6066::t_440a8c4b0cadd1 31,90,101,130,137,147,155,166,174,182
+MCP_TOOLS_CATALOG.md
+  s_15a54371973e0f::t_8cec10a8fedcea 1020
+tests/test_server.py
+  s_421cd2800f6066::t_b478cbcd335714 8
+  s_421cd2800f6066::t_1a60d1790c0bac 1055-1057
+  s_421cd2800f6066::t_378f9501c2b70b 1231-1232
+  s_421cd2800f6066::t_859305530f4993 799-803
+  s_421cd2800f6066::t_d9c7b122b49219 606-609
+  s_421cd2800f6066::t_de9b830c848e78 876-878
+  s_421cd2800f6066::t_57c1537381a2b7 925
+  s_421cd2800f6066::t_b457515dd5847c 1160-1161
+  s_421cd2800f6066::t_2a3d2135d9e622 882-885,899-901
+  s_421cd2800f6066::t_ae585d071e30fc 548-554
+  s_421cd2800f6066::t_76e37be1e3fc25 690-695
+  s_421cd2800f6066::t_8428bf6995ee1b 1103
+models/base.py
+  s_421cd2800f6066::t_47f489c99ca536 20,24-32,35
+  s_421cd2800f6066::t_2f738def2c76d3 1-19,21-23,33-34,36
+models/policy_models.py
+  s_421cd2800f6066::t_c566758e94ef5d 4-6
+  s_421cd2800f6066::t_5b987cda6c392d 13,58,96,126,143,172,182,192,206,231,251,286,301,322,327,344,353,370,374,378,390,397,404,411
+server.py
+  s_421cd2800f6066::t_83a3f47189329a 133
+  s_421cd2800f6066::t_35670d6a548af6 467
+  s_421cd2800f6066::t_e7c17b15608bcb 327
+  s_421cd2800f6066::t_ce5be3882882d7 389
+  s_421cd2800f6066::t_505797940be632 284
+  s_421cd2800f6066::t_6bbe4d5718be98 422
+  s_421cd2800f6066::t_a2d26cdd1543c0 488
+  s_421cd2800f6066::t_652a13d34fb1ab 188
+  s_421cd2800f6066::t_1f40fa30c2d860 156
+  s_421cd2800f6066::t_b609c3803d0779 167
+  s_421cd2800f6066::t_de1aa3177af2fa 518
+  s_421cd2800f6066::t_f8e3e8f33069f7 256
+  s_421cd2800f6066::t_06704cb889ad7e 219-226
+  s_421cd2800f6066::t_92b05d9507d191 273
+  s_421cd2800f6066::t_73884cd25da2e8 452
+  s_421cd2800f6066::t_2fe50d8afc8ba2 438
+  s_421cd2800f6066::t_b74f85bca27b4c 353
+  s_421cd2800f6066::t_b93d4b6c87676e 303
+  s_421cd2800f6066::t_17ee40afa1829e 501
+  s_421cd2800f6066::t_8c71bd400445fb 198
+  s_f72db9019f7144::t_db37e89ea6c32b 292-295
+  s_f72db9019f7144::t_54181ca386360e 312-316,320-325,329-334,337-347
+tests/test_policy_context_resolver.py
+  s_421cd2800f6066::t_4ba08e6d45d4f2 391,399-400,404-405
+  s_421cd2800f6066::t_b7245a24eb2c8f 422-423
+models/certificate_models.py
+  s_421cd2800f6066::t_45648024f3a5c5 5,7
+  s_421cd2800f6066::t_5b987cda6c392d 10,35,60,70,76,96,106
+  s_421cd2800f6066::t_c1feef0dc199ef 9
+models/deployment_models.py
+  s_421cd2800f6066::t_cca8348cc1c697 5-7
+  s_421cd2800f6066::t_5b987cda6c392d 12,44,200,218
+models/failure_models.py
+  s_421cd2800f6066::t_d559b870c063fe 4,6,10
+  s_421cd2800f6066::t_e2988ee5d8fc72 18,40
+README.md
+  s_f72db9019f7144::t_1dd2edd9b93199 21-29
+  s_f72db9019f7144::t_8d5b2fd7a23ae1 5-9
+  s_f72db9019f7144::t_54385686014b1b 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3d2d10c71690aa7b9c8d1a43d3809a1cefe1e254",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_15a54371973e0f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8107167-53aa-42b5-9b04-415515e703bb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_22a7af17f3b9df": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54333482-7d03-46f9-9f87-8d24d79db27c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_421cd2800f6066": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f922f6bc-8eb8-4bf6-98d1-1af1a9133b3e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_f72db9019f7144": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "190477da-a86e-44ad-b717-7947341c94a5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
