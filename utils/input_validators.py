@@ -7,6 +7,9 @@ from typing import Optional
 from models.error_models import ErrorCategory, raise_tool_error
 
 
+_HOSTNAME_RE = re.compile(r"^[a-zA-Z][\w\-]*$")
+
+
 def normalize_mac_address(mac: str) -> str:
     """Normalize a MAC address to uppercase colon-separated format (XX:XX:XX:XX:XX:XX).
 
@@ -55,6 +58,28 @@ def validate_ip_address(value: str) -> str:
             ErrorCategory.CLIENT_ERROR,
             "INVALID_IP_ADDRESS",
             f"'{value}' is not a valid IP address.",
+        )
+    return value
+
+
+def validate_hostname(value: str) -> str:
+    """Validate an ISE node hostname.
+
+    Matches the deployment API's contract: must start with a letter,
+    contain only word chars/hyphens, length 1-64. Rejecting other input
+    also guards against filter-string injection (dots, ampersands, etc.).
+
+    Returns the stripped hostname on success.
+    Raises a CLIENT_ERROR ToolError on invalid format.
+    """
+    value = value.strip()
+    if not value or len(value) > 64 or not _HOSTNAME_RE.match(value):
+        raise_tool_error(
+            ErrorCategory.CLIENT_ERROR,
+            "INVALID_HOSTNAME",
+            f"'{value}' is not a valid ISE node hostname. "
+            "Expected 1-64 characters, starting with a letter and containing "
+            "only letters, digits, underscores, or hyphens (no dots or FQDNs).",
         )
     return value
 

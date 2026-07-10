@@ -8,15 +8,19 @@ from pydantic import Field
 
 from clients.client_factory import client_factory
 from clients.mnt_client import mnt_client
+from clients.ise_web_session import ise_web_session
+from services.log_service import log_service
+from services.certificate_diagnostics_resolver import CertificateDiagnosticsResolver
 from tools.certificates_tool_handler import CertificatesToolHandler
 from tools.policy_tool_handler import PolicyToolHandler
 from tools.session_tool_handler import SessionToolHandler
 from tools.failure_tool_handler import FailureToolHandler
+from tools.deployment_tool_handler import DeploymentToolHandler
 from services.policy_context_resolver import PolicyContextResolver
 from services.latency_context_resolver import LatencyContextResolver
-from services.failure_context_resolver import FailureContextResolver
+from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
 from resources.ise_glossary import TOOL_GLOSSARIES, DEFAULT_GLOSSARY
-from utils.xml_parser import parse_msg_catalog, parse_failure_reasons_xml
+from utils.xml_parser import parse_msg_catalog
 from models.session_models import (
     ActiveSessionSearchResult,
     EnrichedSessionSearchResult,
@@ -24,14 +28,12 @@ from models.session_models import (
     PolicyEnrichedSessionSearchResult,
 )
 from models.failure_models import AaaFailureInvestigationResult
+from models.deployment_models import DeploymentHealthResult
+from models.certificate_models import CertificateDiagnosisResult
 from models.policy_models import (
     AuthenticationRuleSearchResult,
     AuthorizationRuleSearchResult,
     PolicySetSearchResult,
-    PolicySetDetailsResult,
-    AuthorizationProfileSearchResult,
-    LibraryConditionSearchResult,
-    PolicyAuthoringReferencesResult,
 )
 from logger import logger
 from shared_libs import measure_time_async, normalize_docstring
@@ -40,7 +42,6 @@ from utils.ise_credential_middleware import IseCredentialMiddleware
 MSG_CATALOG_PATH = os.getenv("MSG_CATALOG_PATH", "msg_cat.xml")
 
 latency_context_resolver: Optional[LatencyContextResolver] = None
-failure_context_resolver: Optional[FailureContextResolver] = None
 
 
 @asynccontextmanager
@@ -50,24 +51,30 @@ async def app_lifespan(server: FastMCP):
     Handles startup and shutdown of async clients.
     """
     # Startup:
-    global latency_context_resolver, failure_context_resolver
+    global latency_context_resolver
 
     logger.info("Starting server lifecycle: initializing clients...")
     await mnt_client.setup()
     logger.info("MNT client ready")
 
+    await ise_web_session.setup()
+    await log_service.setup()
+    logger.info("Log service ready")
+
     msg_catalog = parse_msg_catalog(MSG_CATALOG_PATH)
     latency_context_resolver = LatencyContextResolver(msg_catalog)
     logger.info("Latency context resolver ready")
 
-    try:
-        failure_reasons_response = await mnt_client.get("FailureReasons")
-        failure_reasons_catalog = parse_failure_reasons_xml(failure_reasons_response.text)
-        failure_context_resolver = FailureContextResolver(msg_catalog, failure_reasons_catalog)
-        logger.info("Failure context resolver ready", count=len(failure_reasons_catalog))
-    except Exception as e:
-        logger.warning("Failed to load failure reasons catalog — running in degraded mode", error=str(e))
-        failure_context_resolver = None
+    # The FailureReasons catalog is NOT fetched here. Doing so at startup
+    # issues an MnT GET outside any inbound MCP request, so no per-user
+    # X-ISE-Authorization header is in scope and the call can only use the
+    # service account (failing loudly in header-only deployments). Instead
+    # the FailureContextResolver is built lazily on the first AAA-failure
+    # tool call, inside that request's task, so it authenticates with the
+    # per-user credential. We only hand the handler the local, network-free
+    # message catalog here. See FailureToolHandler._get_failure_resolver.
+    failure_tool_handler.attach_msg_catalog(msg_catalog)
+    logger.info("Failure tool handler ready (resolver builds lazily on first use)")
 
     yield {}
     
@@ -77,17 +84,28 @@ async def app_lifespan(server: FastMCP):
     await mnt_client.close()
     logger.info("MNT client closed")
 
+    await log_service.close()
+    await ise_web_session.close()
+    logger.info("Log service closed")
+
 
 ise_mcp_server = FastMCP("ise-mcp-server", lifespan=app_lifespan)
 ise_mcp_server.add_middleware(IseCredentialMiddleware())
 PORT = int(os.getenv("PORT", "5000"))
 HOST = os.getenv("HOST", "0.0.0.0")
 
-certificates_tool_handler = CertificatesToolHandler(client_factory)
+certificate_diagnostics_resolver = CertificateDiagnosticsResolver(client_factory)
+certificates_tool_handler = CertificatesToolHandler(
+    client_factory, certificate_diagnostics_resolver
+)
 policy_tool_handler = PolicyToolHandler(client_factory)
 policy_context_resolver = PolicyContextResolver(policy_tool_handler)
 session_tool_handler = SessionToolHandler(mnt_client)
 failure_tool_handler = FailureToolHandler(mnt_client)
+deployment_diagnostics_resolver = DeploymentDiagnosticsResolver()
+deployment_tool_handler = DeploymentToolHandler(
+    client_factory, deployment_diagnostics_resolver
+)
 
 
 @ise_mcp_server.resource(
@@ -112,7 +130,7 @@ async def active_sessions_search(
     server: Annotated[Optional[str], "ISE node name."] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=20, description="Max results.")] = 10,
-) -> str:
+) -> ActiveSessionSearchResult:
     """
     Locate sessions and look up their IDENTIFIERS: username, MAC, IP, IPv6,
     NAS, ISE node, audit_session_id. No profiles, posture, identity store, auth
@@ -135,7 +153,7 @@ async def active_sessions_search(
         minutes=minutes,
         limit=limit,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 
 @ise_mcp_server.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
@@ -146,7 +164,7 @@ async def sessions_search_with_advanced_details(
     calling_station_id: Annotated[Optional[str], "Endpoint MAC."] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=10, description="Max sessions to enrich and return.")] = 1,
-) -> str:
+) -> EnrichedSessionSearchResult:
     """
     Show WHAT was applied to a session: auth result (passed/failed), auth
     method/protocol, posture status, identity store, identity group, response
@@ -167,7 +185,7 @@ async def sessions_search_with_advanced_details(
         minutes=minutes,
         limit=limit,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 @ise_mcp_server.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
 @measure_time_async
@@ -177,7 +195,7 @@ async def sessions_search_with_policy_details(
     calling_station_id: Annotated[Optional[str], "Endpoint MAC."] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=10, description="Max sessions to enrich and return.")] = 1,
-) -> str:
+) -> dict:
     """
     Explain WHY a specific user/endpoint session was authorized: matched policy
     set, authn rule, and authz rule with their CONDITIONS (if/then logic), the
@@ -198,8 +216,14 @@ async def sessions_search_with_policy_details(
         limit=limit,
     )
     result: PolicyEnrichedSessionSearchResult = await policy_context_resolver.enrich_sessions_with_policy_context(enriched_result)
-    return result.model_dump_json(
-        exclude_none=True,
+    # Returned as a dict rather than the typed model: this view deliberately
+    # projects out the SessionDetail fields already covered by
+    # sessions_search_with_advanced_details. Those fields are shared on
+    # SessionDetail, so the exclusion must be applied per-call here. FastMCP
+    # still emits this dict as structuredContent (None values dropped by the
+    # IseResultModel serializer); only the derived outputSchema is skipped.
+    return result.model_dump(
+        mode="json",
         exclude={
             "sessions": {
                 "__all__": {
@@ -229,7 +253,7 @@ async def sessions_search_with_latency_details(
     max_latency_ms: Annotated[Optional[int], Field(ge=0, description="Max response_time_ms.")] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=10, description="Max sessions to enrich and return.")] = 1,
-) -> str:
+) -> LatencyEnrichedSessionSearchResult:
     """
     Break down HOW LONG each ISE authentication STEP took: per-step latency
     (step name, message, milliseconds), with optional min/max filtering.
@@ -246,7 +270,7 @@ async def sessions_search_with_latency_details(
         max_latency_ms=max_latency_ms,
     )
     result: LatencyEnrichedSessionSearchResult = latency_context_resolver.enrich_sessions_with_latency_context(enriched_result)
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 
 @ise_mcp_server.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
@@ -257,7 +281,7 @@ async def ise_investigate_aaa_failure(
     username: Annotated[Optional[str], "Username."] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=10, description="Result cap.")] = 1,
-) -> str:
+) -> AaaFailureInvestigationResult:
     """
     Investigate the ROOT CAUSE of a RADIUS AAA authentication FAILURE for an
     endpoint or user: failure reason, cause, and resolution. Pass both MAC and
@@ -265,17 +289,137 @@ async def ise_investigate_aaa_failure(
 
     USE THIS only when authentication FAILED and you need why: access denied,
     failure reason, why rejected, how to fix.
+
+    Session-scoped: an access-reject that never created a session may return no
+    results — an empty result means "no matching failure in the recent MnT
+    window", not proof the auth never happened.
     """
     result: AaaFailureInvestigationResult = await failure_tool_handler.investigate_aaa_failure(
         mac_address=mac_address,
         username=username,
         minutes=minutes,
         limit=limit,
-        failure_context_resolver=failure_context_resolver,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 
+@ise_mcp_server.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+@measure_time_async
+@normalize_docstring
+async def ise_deployment_health(
+    hostnames: Annotated[
+        Optional[list[str]],
+        "Exact ISE node hostnames to include (OR-matched). Omit for cluster-wide "
+        "health, topology, or HA questions. A filtered result describes ONLY the "
+        "named nodes and cannot support deployment-wide HA/redundancy conclusions "
+        "(whether a Secondary PAN exists, PAN failover readiness) — re-run without "
+        "hostnames to assess HA.",
+    ] = None,
+    deep_diagnostics: Annotated[
+        bool,
+        "Default false. When true, also gather deeper per-node diagnostic data "
+        "(log-derived system stats: CPU, memory, process health, replication "
+        "indicators). Heavier and slower — set true ONLY when the user's wording "
+        "signals a problem or asks to investigate/diagnose (e.g. 'down', "
+        "'not syncing', 'out of sync', 'registration failed', 'overloaded'). "
+        "Keep false for general status, topology, readiness, or HA questions.",
+    ] = False,
+) -> DeploymentHealthResult:
+    """
+    Cisco ISE deployment topology and node-level health from
+    GET /api/v1/deployment/node.
+
+    USE THIS for the cluster/deployment itself: node list and topology; PAN/MnT
+    roles and PAN redundancy/HA readiness; which nodes are Connected vs
+    Disconnected/NotInSync; which nodes run Session/Profiler/DeviceAdmin services.
+
+    Returns:
+    - nodes[]: hostname, fqdn, ip_address, roles, services, node_status
+      (e.g. Connected, Disconnected, NotInSync).
+    - summary: status_counts, unhealthy_nodes, PrimaryAdmin/SecondaryAdmin
+      presence, ha_ready, and verdict (healthy | degraded | critical). The
+      PAN-redundancy/HA fields are populated only for a full-deployment query;
+      with hostnames set the scope is "filtered" and they are null.
+
+    Do NOT use for: live authentication/session details (use the session tools);
+    certificate expiry or TLS errors (use ise_diagnose_certificate_issues); or
+    alarms, licensing, or backups (not returned). With hostnames set, do not draw
+    deployment-wide HA/redundancy conclusions.
+    """
+    result: DeploymentHealthResult = await deployment_tool_handler.get_deployment_health(
+        hostnames=hostnames,
+        deep_diagnostics=deep_diagnostics,
+    )
+    return result
+
+
+@ise_mcp_server.tool(annotations={"readOnlyHint": True, "openWorldHint": True})
+@measure_time_async
+@normalize_docstring
+async def ise_diagnose_certificate_issues(
+    expiry_days: Annotated[
+        int,
+        Field(ge=1, le=365, description="Look-ahead window in days for the certificate expiry check."),
+    ] = 30,
+    status_filter: Annotated[
+        str,
+        "ISE certificate status to filter the expiry check on: 'all', 'enabled', "
+        "or 'disabled'. Defaults to 'enabled' — only enabled trusted certificates "
+        "are considered unless the user explicitly asks for all or disabled certs.",
+    ] = "enabled",
+    scan_logs: Annotated[
+        bool,
+        "Boolean, default true. When true, also scan ise-psc.log on PSN nodes for "
+        "certificate/TLS error signals (handshake failures, Unknown CA, PKIX path "
+        "errors, OCSP callbacks, RADIUS cert error codes, cert-management failures) "
+        "in the most recent 2-hour window. Set false for a fast expiry-only check "
+        "when the user only asks whether certificates are expiring/expired.",
+    ] = True,
+    hostnames: Annotated[
+        Optional[list[str]],
+        "Optional list of ISE node hostnames to restrict the log scan to. Only PSN "
+        "nodes are scanned; a supplied host that is not a PSN is silently skipped. "
+        "When omitted, all PSN nodes are scanned (capped at 5). Does not affect the "
+        "expiry check, which always covers the whole trusted-certificate store.",
+    ] = None,
+    limit: Annotated[
+        int,
+        Field(ge=1, le=100, description="Max certificates to return in the expiry result."),
+    ] = 25,
+) -> CertificateDiagnosisResult:
+    """
+    Diagnose Cisco ISE certificate issues from two angles and return a combined
+    verdict. First, list trusted CA certificates that are expired or expiring
+    within expiry_days (most-urgent-first). Second, when scan_logs is true, scan
+    ise-psc.log on PSN nodes for certificate/TLS error signals over the recent
+    2-hour window and surface up to 5 raw matched log lines per node.
+
+    USE THIS when the question mentions certificate expiry or renewal, OR
+    certificate/TLS errors seen on PSNs: EAP-TLS/RADIUS handshake failures,
+    "Unknown CA", untrusted or unknown certificate authority, PKIX/path-building
+    errors, OCSP/CRL validation problems, or certificate-management failures.
+
+    Set scan_logs=false for a quick "are any certs expiring?" check. Keep it true
+    to investigate suspected live certificate/TLS failures.
+
+    Do NOT use for node/deployment health, sessions, policy, or system identity
+    certificate provisioning — use the deployment, session, or policy tools.
+
+    Returns:
+    - expiry: expiring/expired trusted certificates and aggregate counts.
+    - log_scan: per-PSN-node raw matched log lines plus a "scanned X of Y PSN
+      node(s)" coverage note (null when scan_logs=false).
+    - verdict: critical (any expired cert or log signal), warning (expiring only),
+      or healthy.
+    """
+    result: CertificateDiagnosisResult = await certificates_tool_handler.diagnose_certificate_issues(
+        expiry_days=expiry_days,
+        status_filter=status_filter,
+        scan_logs=scan_logs,
+        hostnames=hostnames,
+        limit=limit,
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +435,7 @@ async def ise_search_policy_sets(
     limit: Annotated[int, Field(ge=1, le=100, description="Max policy sets to return.")] = 20,
     min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Lower bound: keep policy sets with hit_counts >= this. Use for 'hit at least N times / busiest / most used'.")] = None,
     max_hit_counts: Annotated[Optional[int], Field(ge=0, description="Upper bound: keep policy sets with hit_counts <= this. Use max_hit_counts=0 for 'never hit / 0 hit counts / stale / unused', or N for 'rarely used / at most N hits'.")] = None,
-) -> str:
+) -> PolicySetSearchResult:
     """
     List ALL policy sets: name, rank, state, hit counts, condition, service.
     No internal rule details.
@@ -305,38 +449,8 @@ async def ise_search_policy_sets(
         min_hit_counts=min_hit_counts,
         max_hit_counts=max_hit_counts,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
-
-@ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
-@measure_time_async
-@normalize_docstring
-async def ise_get_policy_set_details(
-    policy_set_name: Annotated[str, "Exact policy-set name (the human-readable label shown in the ISE UI)."],
-    rules_per_section_limit: Annotated[int, Field(ge=1, le=25, description="Max rules to return per section (authn / authz / local exceptions).")] = 10,
-) -> str:
-    """
-    [REQUIRES a policy-set name] Return the full rule tree INSIDE a single
-    policy set: authentication rules, authorization rules, and local exception
-    rules — with their identity stores, state, hit counts, conditions, and
-    evaluation order (rank).
-
-    USE THIS when the question asks about anything INSIDE a named policy set:
-    'show me everything inside X', 'what is the evaluation order in X',
-    'which identity store does each authn rule use in X', 'are there disabled
-    rules in X', 'what authz profiles are assigned by rules in X', 'does X
-    have local exception rules'.
-
-    Do NOT use to discover what policy sets exist (use ise_search_policy_sets).
-
-    Do NOT use for cross-policy-set reverse lookups by profile or identity
-    store (use ise_search_authorization_rules / ise_search_authentication_rules).
-    """
-    result: PolicySetDetailsResult = await policy_tool_handler.get_policy_set_details(
-        policy_set_name=policy_set_name,
-        rules_per_section_limit=rules_per_section_limit,
-    )
-    return result.model_dump_json(exclude_none=True)
 
 
 @ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
@@ -350,7 +464,7 @@ async def ise_search_authorization_rules(
     min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Only include rules with hit_counts >= this value. Use 0 to find unused rules.")] = None,
     name_substring: Annotated[Optional[str], "Case-insensitive substring of the rule name."] = None,
     limit: Annotated[int, Field(ge=1, le=50, description="Max per-policy-set rules to return.")] = 25,
-) -> str:
+) -> AuthorizationRuleSearchResult:
     """
     Find authorization rules (a.k.a. "authorization policies") across policy
     sets by profile, SGT, state, hit count, or rule name. Includes global
@@ -371,7 +485,7 @@ async def ise_search_authorization_rules(
         name_substring=name_substring,
         limit=limit,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 
 @ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
@@ -384,7 +498,7 @@ async def ise_search_authentication_rules(
     min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Only include rules with hit_counts >= this value. Use 0 to find unused rules.")] = None,
     name_substring: Annotated[Optional[str], "Case-insensitive substring of the rule name."] = None,
     limit: Annotated[int, Field(ge=1, le=50, description="Max rules to return.")] = 25,
-) -> str:
+) -> AuthenticationRuleSearchResult:
     """
     Find authentication rules in the policy CONFIGURATION across policy sets by
     identity store, state, hit count, or rule name. Returns identity_source_name
@@ -401,85 +515,9 @@ async def ise_search_authentication_rules(
         name_substring=name_substring,
         limit=limit,
     )
-    return result.model_dump_json(exclude_none=True)
+    return result
 
 
-@ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
-@measure_time_async
-@normalize_docstring
-async def ise_search_authorization_profiles(
-    name_substring: Annotated[Optional[str], "Case-insensitive substring of the profile name."] = None,
-    limit: Annotated[int, Field(ge=1, le=200, description="Max profiles to return.")] = 50,
-) -> str:
-    """
-    [CATALOG lookup] List available authorization profile NAMES (not which
-    rules use them). Returns name + description only.
-
-    USE THIS to: verify a profile exists, find profiles matching a substring,
-    or audit the authorization profile catalog.
-
-    Do NOT use to find which rules USE a profile (use
-    ise_search_authorization_rules with profile_name_filter).
-    """
-    result: AuthorizationProfileSearchResult = await policy_tool_handler.search_authorization_profiles(
-        name_substring=name_substring,
-        limit=limit,
-    )
-    return result.model_dump_json(exclude_none=True)
-
-
-@ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
-@measure_time_async
-@normalize_docstring
-async def ise_search_library_conditions(
-    name_substring: Annotated[Optional[str], "Case-insensitive substring of the condition name."] = None,
-    scope_filter: Annotated[str, "Scope filter: 'all', 'policyset', 'authentication', or 'authorization'."] = "all",
-    limit: Annotated[int, Field(ge=1, le=50, description="Max conditions to return.")] = 25,
-) -> str:
-    """
-    [CATALOG lookup] Look up reusable library conditions and return what each
-    one actually evaluates (e.g. 'Network Access:Protocol equals RADIUS').
-
-    USE THIS for: 'what does library condition X evaluate?', 'find conditions
-    usable in authentication rules', 'is there a condition named Y?'.
-
-    Do NOT use for inline conditions on rules (those appear as
-    condition_summary in ise_get_policy_set_details output).
-    """
-    result: LibraryConditionSearchResult = await policy_tool_handler.search_library_conditions(
-        name_substring=name_substring,
-        scope_filter=scope_filter,
-        limit=limit,
-    )
-    return result.model_dump_json(exclude_none=True)
-
-
-@ise_mcp_server.tool(annotations={"readOnlyHint": True, "idempotentHint": True, "openWorldHint": True})
-@measure_time_async
-@normalize_docstring
-async def ise_list_policy_authoring_references(
-    name_substring: Annotated[Optional[str], "Case-insensitive substring applied to all three sections (identity stores, security groups, service names)."] = None,
-    limit_per_section: Annotated[int, Field(ge=1, le=200, description="Max items returned per section (identity stores / security groups / service names).")] = 50,
-) -> str:
-    """
-    [CATALOG lookup] List reference catalogs: identity stores, TrustSec
-    security groups (SGTs), and service names (Allowed Protocols / Server
-    Sequences). Returns NAMES only.
-
-    USE THIS for: 'what identity stores can I reference?', 'what SGTs are
-    available?', 'what allowed-protocols services exist?', 'what can I use
-    when creating a new policy set?'.
-
-    Do NOT use for authorization profiles (use
-    ise_search_authorization_profiles).
-
-    Do NOT use for library conditions (use ise_search_library_conditions).
-    """
-    result: PolicyAuthoringReferencesResult = await policy_tool_handler.list_policy_authoring_references(
-        name_substring=name_substring,
-        limit_per_section=limit_per_section,
-    )
-    return result.model_dump_json(exclude_none=True)
 
 
 def main():

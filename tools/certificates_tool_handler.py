@@ -12,9 +12,12 @@ from clients.client_factory import ClientFactory, ClientName
 from logger import logger
 from models.certificate_models import (
     CertExpirationSummary,
+    CertLogScanResult,
+    CertificateDiagnosisResult,
     ExpiringCertificateSummary,
     ExpiringTrustedCertificatesResponse,
 )
+from services.certificate_diagnostics_resolver import CertificateDiagnosticsResolver
 from tools.base_tool_handler import BaseToolHandler
 from utils.certificate_validators import validate_cert_limit, validate_cert_status_filter, validate_expiry_days
 
@@ -112,11 +115,37 @@ def _build_cert_summary(
     )
 
 
+def _derive_verdict(
+    expiry_summary: CertExpirationSummary,
+    log_scan: CertLogScanResult | None,
+) -> Literal["healthy", "warning", "critical"]:
+    """Combine expiry counts and log signals into a single verdict.
+
+    critical: any expired cert OR any matched log signal on any node.
+    warning:  certs expiring within the window (none expired) and no signals.
+    healthy:  nothing expiring/expired and no signals.
+    """
+    log_hits = 0
+    if log_scan is not None:
+        log_hits = sum(n.total_matches for n in log_scan.nodes)
+
+    if expiry_summary.expired_count > 0 or log_hits > 0:
+        return "critical"
+    if expiry_summary.warning_count > 0:
+        return "warning"
+    return "healthy"
+
+
 class CertificatesToolHandler(BaseToolHandler):
     """Handler for certificates-related MCP tools."""
 
-    def __init__(self, client_factory: ClientFactory):
+    def __init__(
+        self,
+        client_factory: ClientFactory,
+        diagnostics_resolver: CertificateDiagnosticsResolver,
+    ):
         super().__init__(ClientName.CERTIFICATES, client_factory)
+        self.diagnostics_resolver = diagnostics_resolver
 
     async def check_expiring_trusted_certificates(
         self,
@@ -239,4 +268,61 @@ class CertificatesToolHandler(BaseToolHandler):
                 checked_at=now.isoformat(),
                 expiry_window_days=validated_days,
             ),
+        )
+
+    async def diagnose_certificate_issues(
+        self,
+        expiry_days: int = 30,
+        status_filter: str = "enabled",
+        scan_logs: bool = True,
+        hostnames: list[str] | None = None,
+        limit: int = 25,
+    ) -> CertificateDiagnosisResult:
+        """Diagnose certificate health: expiry check plus optional PSN log scan.
+
+        Args:
+            expiry_days: Look-ahead window for the trusted-cert expiry check.
+            status_filter: 'all' | 'enabled' | 'disabled' (default 'enabled').
+            scan_logs: When False, skip the PSN ise-psc.log scan entirely.
+            hostnames: Restrict the log scan to these nodes (non-PSN hosts are
+                silently skipped). Ignored by the expiry check.
+            limit: Max certificates in the expiry result.
+
+        Returns:
+            CertificateDiagnosisResult with expiry, optional log_scan, and verdict.
+        """
+        expiry = await self.check_expiring_trusted_certificates(
+            expiry_days=expiry_days,
+            include_expired=True,
+            status_filter=status_filter,
+            limit=limit,
+        )
+
+        log_scan: CertLogScanResult | None = None
+        if scan_logs:
+            try:
+                log_scan = await self.diagnostics_resolver.resolve(hostnames=hostnames)
+            except Exception as exc:
+                # Scan-wide failure (e.g. node discovery unavailable) must not sink
+                # the already-successful expiry result. Degrade to an empty scan with
+                # a generic coverage note; the error detail goes only to the log.
+                logger.warning(
+                    "Certificate log scan unavailable; returning expiry-only diagnosis",
+                    error=str(exc),
+                )
+                log_scan = CertLogScanResult(
+                    nodes=[],
+                    psn_nodes_total=0,
+                    psn_nodes_scanned=0,
+                    psn_nodes_succeeded=0,
+                    coverage_note="PSN log scan unavailable; certificate log signals "
+                    "could not be collected. Verdict reflects the expiry check only.",
+                )
+
+        verdict = _derive_verdict(expiry.summary, log_scan)
+        return CertificateDiagnosisResult(
+            expiry=expiry,
+            log_scan=log_scan,
+            verdict=verdict,
+            checked_at=datetime.now(tz=timezone.utc).isoformat(),
         )

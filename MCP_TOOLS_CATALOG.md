@@ -8,6 +8,8 @@ This document provides a comprehensive reference for all MCP tools exposed by th
 
 - [Active Sessions](#active-sessions)
 - [Policy Configuration](#policy-configuration)
+- [Deployment Health](#deployment-health)
+- [Certificates](#certificates)
 - [Tool Selection Guide](#tool-selection-guide)
 - [Data Sources](#data-sources)
 
@@ -788,99 +790,185 @@ Use `ise_search_policy_sets` to discover policy set names to pass via `policy_se
 
 ---
 
-### ise_get_policy_set_details
+## Deployment Health
 
-Retrieve the full configuration of a single Network Access policy set by name, including all authentication rules, authorization rules, and local exception rules within that policy set. Returns complete rule definitions with rank, state, hit counts, conditions, identity sources, profiles, and security groups.
+Read-only tool for inspecting the Cisco ISE deployment itself — node inventory, personas/roles, services, node status, PAN redundancy/HA readiness, and an overall health verdict. Sourced from the ISE Deployment API (`GET /api/v1/deployment/node`), with optional log-derived per-node system statistics.
 
-Use `ise_search_policy_sets` to discover available policy set names.
+### ise_deployment_health
+
+Returns Cisco ISE deployment topology and node-level deployment health. Use it for questions about the cluster/deployment itself: which nodes exist, which node is Primary/Secondary PAN, which nodes provide MnT, PSN/Session, Profiler, Device Admin, SXP, TC-NAC, PassiveID, or pxGrid services, whether nodes are Connected / Disconnected / out of sync / registration-failed / replication-stopped / not-upgraded, and whether the deployment is healthy, degraded, or critical.
+
+Set `deep_diagnostics=true` only when the user's wording signals a problem or explicitly asks to investigate/diagnose (e.g. "down", "broken", "not syncing", "out of sync", "registration failed", "overloaded", "investigate", "diagnose"). Deep diagnostics is heavier and slower because it reads log-derived system data (CPU, memory, disk, replication/process indicators). For general status, topology, readiness, HA, or plain "is it healthy?" questions, keep it false.
+
+When `hostnames` is set the result describes ONLY the named nodes (`scope: "filtered"`) and cannot support deployment-wide conclusions (PAN redundancy, HA readiness, whether a Secondary PAN exists) — re-run without `hostnames` to assess HA.
 
 **Questions this tool answers:**
 
-- "Show me the full configuration of the 'Guest_Access' policy set"
-- "What are all the authentication and authorization rules in the 'Default' policy set?"
-- "What local exception rules exist in policy set 'Wireless_802.1X'?"
-- "Show me the complete rule hierarchy for policy set 'Corporate_Wired'"
+- "Is my ISE deployment healthy?"
+- "Which ISE nodes are down, disconnected, out of sync, or not upgraded?"
+- "Do I have Primary PAN and Secondary PAN redundancy?"
+- "Is PAN failover or HA readiness okay?"
+- "Which node is PrimaryAdmin, SecondaryAdmin, PrimaryMonitoring, or SecondaryMonitoring?"
+- "What roles and services run on each ISE node?"
+- "Which nodes are PSNs / provide Session service?"
+- "Is replication broken or stopped between deployment nodes?"
+- "Show me the ISE cluster topology."
+- "Is this a standalone or distributed ISE deployment?"
+- "Which nodes are unhealthy before an upgrade or maintenance window?"
 
-| Parameter                    | Type    | Required | Default | Description                                                           |
-| ---------------------------- | ------- | -------- | ------- | --------------------------------------------------------------------- |
-| `policy_set_name`            | string  | Yes      | None    | Exact name of the policy set to retrieve                              |
-| `rules_per_section_limit`    | integer | No       | 10      | Max rules to return per section (authn/authz/local exceptions), range 1-25 |
+
+| Parameter          | Type            | Required | Default | Description                                                                                                                                                                                     |
+| ------------------ | --------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hostnames`        | array\[string]  | No       | None    | Exact ISE node hostnames to include (OR-matched). Omit for cluster-wide health, topology, redundancy, or readiness questions. A filtered result describes ONLY the named nodes and cannot support deployment-wide HA/redundancy conclusions. |
+| `deep_diagnostics` | boolean         | No       | false   | When true, also gather log-derived per-node system statistics (CPU, memory, disk, replication/process indicators). Set true only when wording signals a problem or asks to investigate/diagnose. |
+
 
 **Returns:** JSON object with:
 
-- `policy_set`: Policy set details (`name`, `description`, `state`, `rank`, `hit_counts`, `is_default`, `service_name`, `is_proxy`, `condition_summary`)
-- `authentication_rules`: Section object with `total_count` (total rules in this policy set), `count` (rules returned), `has_more` (true when truncated), `rules[]` (array of authentication rules in rank order, each: `name`, `rank`, `state`, `hit_counts`, `identity_source_name`, `if_auth_fail`, `if_user_not_found`, `if_process_fail`, `condition_summary`)
-- `authorization_rules`: Section object with `total_count`, `count`, `has_more`, `rules[]` (array of authorization rules in rank order, each: `name`, `rank`, `state`, `hit_counts`, `profile`, `security_group`, `condition_summary`)
-- `local_exception_rules`: Section object with `total_count`, `count`, `has_more`, `note` ("Local exception rules are evaluated BEFORE regular authorization rules within this policy set."), `rules[]` (array of local exception authorization rules, same fields as authorization rules)
+- `nodes`: Array of deployed nodes, each containing:
+  - `hostname`: Short hostname of the node
+  - `fqdn`: Fully qualified domain name (may be null)
+  - `ip_address`: Management IP address (may be null)
+  - `roles`: Node personas/roles (e.g. `PrimaryAdmin`, `SecondaryMonitoring`)
+  - `services`: Enabled services (e.g. `Session`, `Profiler`, `pxGrid`)
+  - `node_status`: Deployment status (e.g. `Connected`, `Disconnected`, `NotInSync`)
+- `summary`: Derived health summary:
+  - `total_nodes`: Number of nodes in scope
+  - `status_counts`: Count of nodes by `node_status` value
+  - `unhealthy_nodes`: Hostnames whose `node_status` is not `Connected`
+  - `scope`: `deployment` (covers every node) or `filtered` (restricted to requested hostnames)
+  - `primary_admin_present`: Whether a PrimaryAdmin (Primary PAN) exists (null when scope is `filtered`)
+  - `secondary_admin_present`: Whether a SecondaryAdmin (Secondary PAN) exists (null when `filtered`)
+  - `ha_ready`: True iff both PrimaryAdmin and SecondaryAdmin exist and every admin/PAN node is Connected (null when `filtered`)
+  - `not_found_hostnames`: Requested hostnames matching no node (present only for `filtered` scope when applicable)
+  - `scope_note`: Present only for `filtered` scope; explains deployment-wide conclusions cannot be drawn
+  - `verdict`: `healthy`, `degraded`, or `critical`
+- `diagnostics`: Present only when `deep_diagnostics=true`, otherwise omitted:
+  - `observations`: Human-readable derived observations about node health (including replication/process signals)
+  - `system_stats`: Log-derived per-node system statistics: top-level `anchor`, `duration_minutes`, and `nodes` (keyed by hostname). Each node is either `{status: "ok", window: {start, end}, sample_count, cpu_percent, memory_percent, disk_percent}` (each metric a `{min, max, avg, latest}` object) or `{status: "unavailable", reason}`.
+
+**Example response:**
+
+```json
+{
+  "TODO": "Example response to be added."
+}
+```
+
+**Use when:**
+
+- You need the ISE cluster/deployment topology and node inventory
+- Checking PAN redundancy or HA readiness before an upgrade or maintenance window
+- Identifying which nodes are unhealthy (not Connected) across the deployment
+- Determining which node holds a given persona (PrimaryAdmin, MnT, PSN, etc.)
+- Investigating replication or node-status problems (with `deep_diagnostics=true`)
+
+**Do not use when:**
+
+- You need live RADIUS/TACACS events, sessions, Live Logs, or per-endpoint troubleshooting (use the session/authentication tools)
+- You need policy configuration lookup or changes (use the policy tools)
+- You need certificate expiry, TLS-error diagnosis, licensing, alarms, or backup status (use `ise_diagnose_certificate_issues` for certificates)
+- You need root-cause analysis of an individual authentication, profiler, or pxGrid failure
+
+**Best practices:**
+
+- Omit `hostnames` for any deployment-wide HA/redundancy/topology question; only filter when the user asks about specific nodes
+- Keep `deep_diagnostics=false` for status/readiness checks; enable it only when a problem is signaled
+- A `filtered` result omits `primary_admin_present` / `secondary_admin_present` / `ha_ready` — re-run without `hostnames` to assess HA
 
 ---
 
-### ise_search_authorization_profiles
+## Certificates
 
-List Network Access authorization profiles available for assignment in authorization rules. Search by name substring and filter by enabled/disabled state. Authorization profiles define the network access permissions (VLAN, ACL, URL redirect, etc.) granted to authenticated users.
+Read-only tool for diagnosing Cisco ISE certificate health — trusted-certificate expiry combined with PSN `ise-psc.log` scanning for certificate/TLS error signals.
 
-**Questions this tool answers:**
+### ise_diagnose_certificate_issues
 
-- "What authorization profiles are configured?"
-- "Find all profiles with 'Guest' in the name"
-- "Which authorization profiles are disabled?"
-- "List all enabled authorization profiles available for use in authz rules"
-- "What authorization profile names contain 'Quarantine'?"
+Diagnose ISE certificate issues from two angles and return a combined verdict. First, list trusted CA certificates that are expired or expiring within `expiry_days` (most-urgent-first). Second, when `scan_logs=true`, scan `ise-psc.log` on PSN nodes for certificate/TLS error signals (EAP-TLS/RADIUS handshake failures, "Unknown CA", PKIX/path-building errors, OCSP/CRL problems, certificate-management failures) over the recent 2-hour window, surfacing up to 5 raw matched lines per node.
 
-| Parameter        | Type    | Required | Default | Description                                           |
-| ---------------- | ------- | -------- | ------- | ----------------------------------------------------- |
-| `name_substring` | string  | No       | None    | Case-insensitive substring filter on profile name     |
-| `limit`          | integer | No       | 50      | Max profiles to return (range 1-200)                  |
-
-**Returns:** JSON object with `search_filters`, `total_count`, `count`, `has_more`, and `profiles[]` sorted by `name` ASC. Each profile carries: `name`, `description`.
-
----
-
-### ise_search_library_conditions
-
-Search reusable conditions defined in the ISE conditions library. Library conditions can be referenced by name in policy set conditions, authentication rules, and authorization rules. Filter by name substring and optionally by condition type (e.g., network_access, device_admin, profiler).
+Set `scan_logs=false` for a quick "are any certs expiring?" check. Keep it true to investigate suspected live certificate/TLS failures.
 
 **Questions this tool answers:**
 
-- "What library conditions are available?"
-- "Find library conditions with 'RADIUS' in the name"
-- "What reusable conditions are defined for network access policies?"
-- "List all library conditions that include 'Wireless' in their name"
-- "Which library conditions are configured for use in authorization rules?"
+- "Are any ISE certificates expired or expiring soon?"
+- "Which trusted certificates expire in the next 30 days?"
+- "Are there certificate or TLS handshake errors on my PSNs?"
+- "Why are endpoints getting 'Unknown CA' / untrusted certificate authority errors?"
+- "Are there PKIX path-building or OCSP/CRL validation failures in the logs?"
+- "Is a certificate problem causing EAP-TLS/RADIUS authentication failures?"
+- "Give me an overall certificate-health verdict for my deployment."
 
-| Parameter        | Type    | Required | Default | Description                                                          |
-| ---------------- | ------- | -------- | ------- | -------------------------------------------------------------------- |
-| `name_substring` | string  | No       | None    | Case-insensitive substring filter on condition name                  |
-| `scope_filter`   | string  | No       | "all"   | Scope filter: 'all', 'policyset', 'authentication', or 'authorization' |
-| `limit`          | integer | No       | 25      | Max conditions to return (range 1-50)                                |
 
-**Returns:** JSON object with `search_filters`, `total_count`, `count`, `has_more`, and `conditions[]` sorted by `name` ASC. Each condition carries: `name`, `description`, `condition_summary`.
+| Parameter       | Type            | Required | Default   | Description                                                                                                                                              |
+| --------------- | --------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `expiry_days`   | integer         | No       | 30        | Look-ahead window in days for the expiry check (range 1-365)                                                                                              |
+| `status_filter` | string          | No       | "enabled" | ISE certificate status to filter the expiry check on: `all`, `enabled`, or `disabled`. Defaults to enabled-only unless the user asks for all or disabled |
+| `scan_logs`     | boolean         | No       | true      | When true, also scan `ise-psc.log` on PSN nodes for certificate/TLS error signals in the recent 2-hour window. Set false for a fast expiry-only check    |
+| `hostnames`     | array\[string]  | No       | None      | ISE node hostnames to restrict the log scan to (PSN nodes only; non-PSN hosts silently skipped). When omitted, all PSN nodes are scanned (capped at 5). Does not affect the expiry check |
+| `limit`         | integer         | No       | 25        | Max certificates to return in the expiry result (range 1-100)                                                                                            |
 
----
-
-### ise_list_policy_authoring_references
-
-Retrieve the available reference data for policy authoring: identity stores, security groups (TrustSec SGTs), and service names (allowed protocols / server sequences). Used to discover valid values for authentication and authorization rule configuration.
-
-**Questions this tool answers:**
-
-- "What identity stores can I reference in authentication rules?"
-- "What TrustSec security groups (SGTs) are available for assignment in authorization rules?"
-- "What allowed protocols definitions (service names) can I attach to a policy set?"
-- "List all identity sources configured in ISE"
-- "What server sequences are available?"
-
-| Parameter            | Type    | Required | Default | Description                                                   |
-| -------------------- | ------- | -------- | ------- | ------------------------------------------------------------- |
-| `name_substring`     | string  | No       | None    | Case-insensitive substring applied to all three sections      |
-| `limit_per_section`  | integer | No       | 50      | Max items returned per section (range 1-200)                  |
 
 **Returns:** JSON object with:
 
-- `search_filters`: Filters that were applied
-- `identity_stores`: Section object with `total_count`, `count`, `has_more`, and `items[]` (each: `name`)
-- `security_groups`: Section object with `total_count`, `count`, `has_more`, and `items[]` (each: `name`)
-- `service_names`: Section object with `total_count`, `count`, `has_more`, and `items[]` (each: `name`, `service_type` where `service_type` is "allowed_protocols" or "server_sequence", and `is_local_authorization`)
+- `expiry`: Trusted-certificate expiry check result:
+  - `certificates`: Array sorted by expiration date ascending (most urgent first), each containing:
+    - `friendly_name`: Human-readable certificate label configured in ISE
+    - `expiration_date`: Expiration timestamp (ISO 8601)
+    - `valid_from`: Validity start timestamp (ISO 8601, may be null)
+    - `days_until_expiry`: Days until expiration; negative means already expired
+    - `expiry_status`: `expired` or `warning` (expires within the `expiry_days` window)
+    - `ise_status`: Whether the certificate is enabled or disabled in ISE
+    - `trusted_for`: ISE services this certificate is trusted for (e.g. Cisco Services)
+    - `is_referred_in_policy`: True when actively referenced in an ISE policy (expiry is operationally critical)
+  - `summary`: Aggregate counts and metadata:
+    - `total_matched`: Total certificates matching the filter across all scanned pages (may exceed the returned count when `limit` applies)
+    - `expired_count`: Number of expired certificates in the returned set
+    - `warning_count`: Number of certificates expiring within the window in the returned set
+    - `earliest_expiration`: ISO 8601 expiration of the most urgently expiring certificate (may be null)
+    - `checked_at`: ISO 8601 timestamp of the check (UTC)
+    - `expiry_window_days`: Look-ahead window used, in days
+- `log_scan`: PSN `ise-psc.log` signal scan; null when `scan_logs=false`:
+  - `nodes`: Per-node scan results, each containing:
+    - `hostname`: PSN node hostname (or fqdn) scanned
+    - `status`: `ok` (log fetched and scanned) or `unavailable` (could not fetch/parse)
+    - `matches`: Up to 5 raw matched lines (newest first), each `{ line }`
+    - `total_matches`: Total matching lines seen in the window (may exceed the returned matches)
+    - `reason`: Generic reason when `status` is `unavailable`; null when `ok`
+  - `psn_nodes_total`: PSN nodes discovered as scan candidates
+  - `psn_nodes_scanned`: PSN nodes actually attempted (capped)
+  - `psn_nodes_succeeded`: PSN nodes whose log was fetched and scanned
+  - `coverage_note`: Human-readable "scanned X of Y PSN node(s)" summary
+- `verdict`: `critical` (any expired cert OR any log signal), `warning` (expiring certs only, no signals), or `healthy`
+- `checked_at`: ISO 8601 timestamp of the diagnosis (UTC)
+
+**Example response:**
+
+```json
+{
+  "TODO": "Example response to be added."
+}
+```
+
+**Use when:**
+
+- You need to know whether any trusted certificates are expired or expiring soon
+- Investigating certificate/TLS errors on PSNs (Unknown CA, PKIX, OCSP/CRL, handshake failures)
+- Correlating EAP-TLS/RADIUS authentication failures with certificate problems
+- Getting a single overall certificate-health verdict for the deployment
+
+**Do not use when:**
+
+- You need node/deployment health (use `ise_deployment_health`)
+- You need sessions or per-endpoint authentication troubleshooting (use the session/authentication tools)
+- You need policy configuration (use the policy tools)
+- You need system-identity certificate provisioning or CSR/import operations (out of scope; this tool is read-only diagnosis)
+
+**Best practices:**
+
+- Use `scan_logs=false` for a fast expiry-only check when the user only asks about expiring/expired certs
+- The expiry check always covers the whole trusted-certificate store; `hostnames` only narrows the log scan (PSN nodes only)
+- Pay attention to `is_referred_in_policy=true` certificates — their expiry is operationally critical
+- Check `coverage_note` / `psn_nodes_*` counts to confirm how much of the deployment the log scan actually covered
 
 ---
 
@@ -908,6 +996,14 @@ Retrieve the available reference data for policy authoring: identity stores, sec
 | "Are there global exceptions overriding my authz rule?" | `ise_search_authorization_rules`            |
 | "Which authn rules use Active Directory?"               | `ise_search_authentication_rules`           |
 | "Find lenient authn rules (if_user_not_found=CONTINUE)" | `ise_search_authentication_rules`           |
+| "Is my ISE deployment healthy?"                         | `ise_deployment_health`                     |
+| "Do I have Primary/Secondary PAN redundancy (HA)?"      | `ise_deployment_health`                     |
+| "Which ISE nodes are down / out of sync / not upgraded?"| `ise_deployment_health`                     |
+| "Which node is PrimaryAdmin / MnT / a PSN?"             | `ise_deployment_health`                     |
+| "Investigate why a node is disconnected / not syncing"  | `ise_deployment_health` (deep_diagnostics=true) |
+| "Are any ISE certificates expired or expiring soon?"    | `ise_diagnose_certificate_issues`           |
+| "Are there certificate/TLS (Unknown CA, PKIX) errors?"  | `ise_diagnose_certificate_issues`           |
+| "Quick check: any certs expiring in the next N days?"   | `ise_diagnose_certificate_issues` (scan_logs=false) |
 
 
 ---
@@ -921,6 +1017,8 @@ Retrieve the available reference data for policy authoring: identity stores, sec
 | Sessions with Policy Context  | ISE MNT API + ISE Policy API (Network Access Policy Sets, Authentication Rules, Authorization Rules)                                                                                                                                |
 | Sessions with Latency Details | ISE MNT API (AuthList, Last Session by Attributes) + ISE Message Catalog (execution step code-to-text resolution)                                                                                                                   |
 | AAA Failure Investigation     | ISE MNT API (AuthStatus, Last Session by Attributes, FailureReasons) + ISE Message Catalog                                                                                                                                          |
-| Policy Configuration          | ISE Policy API (Network Access): policy sets, authentication rules, authorization rules, local exception rules, global exception rules, authorization profiles, library conditions, identity stores, security groups, service names |
+| Policy Configuration          | ISE Policy API (Network Access): policy sets, authentication rules, authorization rules, global exception rules |
+| Deployment Health             | ISE Deployment API (`GET /api/v1/deployment/node`) + log-derived per-node system statistics (deep diagnostics)                                                                                                                       |
+| Certificates                  | ISE Certificate/Trusted-Certificate API (expiry) + PSN `ise-psc.log` scan (certificate/TLS error signals)                                                                                                                           |
 
 

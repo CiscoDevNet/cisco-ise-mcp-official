@@ -1,0 +1,34 @@
+# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+import sys
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+
+def test_log_fields_have_defaults(monkeypatch):
+    monkeypatch.delenv("ISE_ADMIN_SESSION_COOKIE", raising=False)
+    monkeypatch.delenv("LOG_CACHE_TTL_S", raising=False)
+    monkeypatch.delenv("LOG_CACHE_DIR_PREFIX", raising=False)
+    from clients.settings import ISESettings
+    s = ISESettings(_env_file=None)
+    assert s.ise_admin_session_cookie is None
+    assert s.log_cache_ttl_s == 300.0
+    assert s.log_cache_dir_prefix == "ise-logs-"
+
+
+def test_empty_cookie_normalizes_to_none(monkeypatch):
+    monkeypatch.setenv("ISE_ADMIN_SESSION_COOKIE", "")
+    from clients.settings import ISESettings
+    s = ISESettings(_env_file=None)
+    assert s.ise_admin_session_cookie is None
+
+
+def test_cookie_is_secret(monkeypatch):
+    monkeypatch.setenv("ISE_ADMIN_SESSION_COOKIE", "APPSESSIONID=abc; MNTLA_JWT_TOKEN=xyz")
+    from clients.settings import ISESettings
+    s = ISESettings(_env_file=None)
+    # SecretStr hides value in repr
+    assert "APPSESSIONID" not in repr(s.ise_admin_session_cookie)
+    assert s.ise_admin_session_cookie.get_secret_value().startswith("APPSESSIONID=")

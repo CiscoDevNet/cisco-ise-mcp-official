@@ -1,12 +1,13 @@
 # Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
 
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from models.base import IseResultModel
 from models.session_models import ExecutionStep
 
 
-class FailureReasonEntry(BaseModel):
+class FailureReasonEntry(IseResultModel):
     """A single entry from the ISE FailureReasons catalog."""
 
     code: str = Field(..., description="Full failure reason code text (e.g. '22040 Wrong password')")
@@ -14,7 +15,7 @@ class FailureReasonEntry(BaseModel):
     resolution: Optional[str] = Field(None, description="Recommended steps to resolve the failure")
 
 
-class AaaFailureDetail(BaseModel):
+class AaaFailureDetail(IseResultModel):
     """A single AAA failure with enriched context."""
 
     user_name: Optional[str] = Field(None, description="Username of the authenticated user")
@@ -36,7 +37,7 @@ class AaaFailureDetail(BaseModel):
     failure_context_note: Optional[str] = Field(None, description="Explanation when enrichment is partial or missing")
 
 
-class AaaFailureInvestigationResult(BaseModel):
+class AaaFailureInvestigationResult(IseResultModel):
     """Result of ise_investigate_aaa_failure tool."""
 
     search_filters: Dict[str, Any] = Field(default_factory=dict, description="Search filters used for the investigation")

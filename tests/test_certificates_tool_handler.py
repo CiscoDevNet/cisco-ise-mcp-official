@@ -158,13 +158,13 @@ def _make_raw_cert(days_from_now: int, status="Enabled", friendly_name="Cert"):
 
 
 class TestCertificatesToolHandler:
-    def _make_handler(self):
+    def _make_handler(self, resolver=None):
         from tools.certificates_tool_handler import CertificatesToolHandler
         from clients.client_factory import ClientName
 
         mock_factory = MagicMock()
         mock_factory.get_client.return_value = MagicMock()
-        handler = CertificatesToolHandler(mock_factory)
+        handler = CertificatesToolHandler(mock_factory, resolver or MagicMock())
         return handler
 
     @pytest.mark.asyncio
@@ -311,3 +311,108 @@ class TestCertificatesToolHandler:
 
         # limit=1 should stop after collecting 1 cert
         assert len(result.certificates) == 1
+
+
+class TestDiagnoseCertificateIssues:
+    def _handler(self, resolver):
+        from tools.certificates_tool_handler import CertificatesToolHandler
+        factory = MagicMock()
+        factory.get_client.return_value = MagicMock()
+        return CertificatesToolHandler(factory, resolver)
+
+    @pytest.mark.asyncio
+    async def test_scan_logs_false_skips_resolver(self):
+        from unittest.mock import AsyncMock, MagicMock
+        resolver = MagicMock()
+        resolver.resolve = AsyncMock()
+        handler = self._handler(resolver)
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"response": []}
+            result = await handler.diagnose_certificate_issues(scan_logs=False)
+        resolver.resolve.assert_not_awaited()
+        assert result.log_scan is None
+        assert result.verdict == "healthy"
+
+    @pytest.mark.asyncio
+    async def test_scan_logs_true_invokes_resolver_and_combines(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from models.certificate_models import CertLogScanResult
+        resolver = MagicMock()
+        resolver.resolve = AsyncMock(return_value=CertLogScanResult(
+            nodes=[], psn_nodes_total=0, psn_nodes_scanned=0,
+            psn_nodes_succeeded=0, coverage_note="Scanned 0 of 0 PSN node(s); 0 succeeded.",
+        ))
+        handler = self._handler(resolver)
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"response": []}
+            result = await handler.diagnose_certificate_issues(scan_logs=True, hostnames=["psn1"])
+        resolver.resolve.assert_awaited_once_with(hostnames=["psn1"])
+        assert result.log_scan is not None
+
+    @pytest.mark.asyncio
+    async def test_scan_wide_failure_degrades_to_expiry_only(self):
+        from unittest.mock import AsyncMock, MagicMock
+        resolver = MagicMock()
+        resolver.resolve = AsyncMock(side_effect=RuntimeError("500 https://10.0.0.1/admin/API/deployment"))
+        handler = self._handler(resolver)
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"response": []}
+            result = await handler.diagnose_certificate_issues(scan_logs=True)
+        # Expiry answer survives; scan degrades to an empty, annotated result.
+        assert result.expiry is not None
+        assert result.log_scan is not None
+        assert result.log_scan.nodes == []
+        assert result.log_scan.psn_nodes_total == 0
+        assert "unavailable" in result.log_scan.coverage_note.lower()
+        # The raised error's internal detail must not leak into the returned model.
+        dumped = result.model_dump_json()
+        assert "10.0.0.1" not in dumped and "500" not in dumped
+        assert result.verdict == "healthy"
+
+    def test_verdict_critical_on_expired(self):
+        from tools.certificates_tool_handler import _derive_verdict
+        from models.certificate_models import CertExpirationSummary
+        summary = CertExpirationSummary(
+            total_matched=1, expired_count=1, warning_count=0,
+            earliest_expiration=None, checked_at="t", expiry_window_days=30,
+        )
+        assert _derive_verdict(summary, None) == "critical"
+
+    def test_verdict_critical_on_log_signal(self):
+        from tools.certificates_tool_handler import _derive_verdict
+        from models.certificate_models import (
+            CertExpirationSummary, CertLogNodeResult, CertLogScanResult, CertLogMatch,
+        )
+        summary = CertExpirationSummary(
+            total_matched=0, expired_count=0, warning_count=0,
+            earliest_expiration=None, checked_at="t", expiry_window_days=30,
+        )
+        scan = CertLogScanResult(
+            nodes=[CertLogNodeResult(hostname="p1", status="ok",
+                   matches=[CertLogMatch(line="Unknown CA")], total_matches=1)],
+            psn_nodes_total=1, psn_nodes_scanned=1, psn_nodes_succeeded=1,
+            coverage_note="Scanned 1 of 1 PSN node(s); 1 succeeded.",
+        )
+        assert _derive_verdict(summary, scan) == "critical"
+
+    def test_verdict_warning_on_expiring_only(self):
+        from tools.certificates_tool_handler import _derive_verdict
+        from models.certificate_models import CertExpirationSummary
+        summary = CertExpirationSummary(
+            total_matched=2, expired_count=0, warning_count=2,
+            earliest_expiration=None, checked_at="t", expiry_window_days=30,
+        )
+        assert _derive_verdict(summary, None) == "warning"
+
+    def test_verdict_healthy_when_clean(self):
+        from tools.certificates_tool_handler import _derive_verdict
+        from models.certificate_models import CertExpirationSummary, CertLogScanResult
+        summary = CertExpirationSummary(
+            total_matched=0, expired_count=0, warning_count=0,
+            earliest_expiration=None, checked_at="t", expiry_window_days=30,
+        )
+        scan = CertLogScanResult(
+            nodes=[], psn_nodes_total=0, psn_nodes_scanned=0,
+            psn_nodes_succeeded=0, coverage_note="Scanned 0 of 0 PSN node(s); 0 succeeded.",
+        )
+        assert _derive_verdict(summary, scan) == "healthy"

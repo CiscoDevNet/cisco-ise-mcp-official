@@ -50,7 +50,9 @@ class ISESettings(BaseSettings):
     # `ise_ip` is excluded on purpose -- it's required, so empty must
     # fail `min_length=1` rather than be silently defaulted.
     @field_validator(
-        "api_port", "api_username", "api_pwd", mode="before"
+        "api_port", "api_username", "api_pwd",
+        "ise_admin_session_cookie", "log_cache_ttl_s", "log_cache_dir_prefix",
+        mode="before",
     )
     @classmethod
     def _empty_str_to_default(cls, v):
@@ -76,6 +78,24 @@ class ISESettings(BaseSettings):
     require_per_user_credential: bool = Field(
         default=False,
         validation_alias="ISE_REQUIRE_PER_USER_CREDENTIAL",
+    )
+
+    # Preferred Tier-1 session cookie for the ISE admin web UI
+    # (/admin/*) log-download surface. Holds the raw Cookie header
+    # value, e.g. "APPSESSIONID=...; MNTLA_JWT_TOKEN=...". When set,
+    # IseWebSession uses it directly and fails loud on expiry; when
+    # empty/absent, IseWebSession falls back to form login. SecretStr
+    # because it is a live credential.
+    ise_admin_session_cookie: Optional[SecretStr] = Field(
+        default=None, validation_alias="ISE_ADMIN_SESSION_COOKIE"
+    )
+    # How long a cached, extracted log is served without revalidation.
+    log_cache_ttl_s: float = Field(
+        default=300.0, gt=0, validation_alias="LOG_CACHE_TTL_S"
+    )
+    # Prefix for the per-process temp cache directory.
+    log_cache_dir_prefix: str = Field(
+        default="ise-logs-", min_length=1, validation_alias="LOG_CACHE_DIR_PREFIX"
     )
 
 

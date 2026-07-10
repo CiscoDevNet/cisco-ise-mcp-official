@@ -1,14 +1,16 @@
 # Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
 
 from typing import Optional, List, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from models.base import IseResultModel
 
 
 # ===========================================================================
 # Building blocks (reused across multiple tools)
 # ===========================================================================
 
-class PolicySetSummary(BaseModel):
+class PolicySetSummary(IseResultModel):
     """Summary of a network access policy set.
 
     Used as both:
@@ -53,7 +55,7 @@ class PolicySetSummary(BaseModel):
     )
 
 
-class AuthenticationRuleSummary(BaseModel):
+class AuthenticationRuleSummary(IseResultModel):
     """Summary of an authentication rule (within a single policy set)."""
 
     name: str = Field(..., description="Rule name")
@@ -91,7 +93,7 @@ class AuthenticationRuleSummary(BaseModel):
     )
 
 
-class AuthorizationRuleSummary(BaseModel):
+class AuthorizationRuleSummary(IseResultModel):
     """Summary of an authorization rule (within a single policy set)."""
 
     name: str = Field(..., description="Rule name")
@@ -121,7 +123,7 @@ class AuthorizationRuleSummary(BaseModel):
     )
 
 
-class PolicyContext(BaseModel):
+class PolicyContext(IseResultModel):
     """Full policy context resolved from the ISE Policy API by name.
 
     Used by the session-driven flow in PolicyContextResolver. Independent
@@ -138,7 +140,7 @@ class PolicyContext(BaseModel):
 # Tool 1 — ise_search_policy_sets
 # ===========================================================================
 
-class PolicySetSearchResult(BaseModel):
+class PolicySetSearchResult(IseResultModel):
     """Result envelope for ``ise_search_policy_sets``."""
 
     search_filters: Dict[str, Any] = Field(
@@ -167,7 +169,7 @@ class PolicySetSearchResult(BaseModel):
 # Tool 2 — ise_get_policy_set_details
 # ===========================================================================
 
-class AuthenticationRulesSection(BaseModel):
+class AuthenticationRulesSection(IseResultModel):
     total_count: int = Field(..., description="Total authentication rules in this policy set.")
     count: int = Field(..., description="Number of rules included in `rules` after truncation.")
     has_more: bool = Field(..., description="True when more rules exist beyond the returned set.")
@@ -177,7 +179,7 @@ class AuthenticationRulesSection(BaseModel):
     )
 
 
-class AuthorizationRulesSection(BaseModel):
+class AuthorizationRulesSection(IseResultModel):
     total_count: int = Field(..., description="Total authorization rules in this policy set.")
     count: int = Field(..., description="Number of rules included in `rules` after truncation.")
     has_more: bool = Field(..., description="True when more rules exist beyond the returned set.")
@@ -187,7 +189,7 @@ class AuthorizationRulesSection(BaseModel):
     )
 
 
-class LocalExceptionRulesSection(BaseModel):
+class LocalExceptionRulesSection(IseResultModel):
     total_count: int = Field(..., description="Total local exception rules in this policy set.")
     count: int = Field(..., description="Number of rules included in `rules` after truncation.")
     has_more: bool = Field(..., description="True when more rules exist beyond the returned set.")
@@ -201,7 +203,7 @@ class LocalExceptionRulesSection(BaseModel):
     )
 
 
-class PolicySetDetailsResult(BaseModel):
+class PolicySetDetailsResult(IseResultModel):
     """Result envelope for ``ise_get_policy_set_details``.
 
     Returns the full decision tree of a single policy set (looked up by name).
@@ -226,7 +228,7 @@ class PolicySetDetailsResult(BaseModel):
 # Tool 3 — ise_search_authorization_rules
 # ===========================================================================
 
-class AuthorizationRuleHit(BaseModel):
+class AuthorizationRuleHit(IseResultModel):
     """Authorization rule hit returned by ``ise_search_authorization_rules``.
 
     ``policy_set_name`` is omitted for global exception rules (they apply
@@ -246,7 +248,7 @@ class AuthorizationRuleHit(BaseModel):
     condition_summary: Optional[str] = Field(None, description="Human-readable summary of the rule's matching condition.")
 
 
-class AuthorizationRuleSearchResult(BaseModel):
+class AuthorizationRuleSearchResult(IseResultModel):
     """Result envelope for ``ise_search_authorization_rules``.
 
     Always returns BOTH per-policy-set rules and global exception rules,
@@ -281,7 +283,7 @@ class AuthorizationRuleSearchResult(BaseModel):
 # Tool 4 — ise_search_authentication_rules
 # ===========================================================================
 
-class AuthenticationRuleHit(BaseModel):
+class AuthenticationRuleHit(IseResultModel):
     """Authentication rule hit returned by ``ise_search_authentication_rules``."""
 
     policy_set_name: str = Field(..., description="Name of the policy set containing the rule.")
@@ -296,7 +298,7 @@ class AuthenticationRuleHit(BaseModel):
     condition_summary: Optional[str] = Field(None, description="Human-readable summary of the rule's matching condition.")
 
 
-class AuthenticationRuleSearchResult(BaseModel):
+class AuthenticationRuleSearchResult(IseResultModel):
     """Result envelope for ``ise_search_authentication_rules``."""
 
     search_filters: Dict[str, Any] = Field(..., description="Filters applied to the search.")
@@ -317,12 +319,12 @@ class AuthenticationRuleSearchResult(BaseModel):
 # Tool 5 — ise_search_authorization_profiles
 # ===========================================================================
 
-class AuthorizationProfileSummary(BaseModel):
+class AuthorizationProfileSummary(IseResultModel):
     name: str = Field(..., description="Authorization profile name.")
     description: Optional[str] = Field(None, description="Profile description, when provided by ISE.")
 
 
-class AuthorizationProfileSearchResult(BaseModel):
+class AuthorizationProfileSearchResult(IseResultModel):
     """Result envelope for ``ise_search_authorization_profiles``."""
 
     search_filters: Dict[str, Any] = Field(..., description="Filters applied to the search.")
@@ -339,7 +341,7 @@ class AuthorizationProfileSearchResult(BaseModel):
 # Tool 6 — ise_search_library_conditions
 # ===========================================================================
 
-class LibraryConditionSummary(BaseModel):
+class LibraryConditionSummary(IseResultModel):
     name: str = Field(..., description="Library condition name.")
     description: Optional[str] = Field(None, description="Condition description, when provided by ISE.")
     condition_summary: Optional[str] = Field(
@@ -348,7 +350,7 @@ class LibraryConditionSummary(BaseModel):
     )
 
 
-class LibraryConditionSearchResult(BaseModel):
+class LibraryConditionSearchResult(IseResultModel):
     """Result envelope for ``ise_search_library_conditions``."""
 
     search_filters: Dict[str, Any] = Field(..., description="Filters applied to the search.")
@@ -365,15 +367,15 @@ class LibraryConditionSearchResult(BaseModel):
 # Tool 7 — ise_list_policy_authoring_references
 # ===========================================================================
 
-class IdentityStoreSummary(BaseModel):
+class IdentityStoreSummary(IseResultModel):
     name: str = Field(..., description="Identity store name (referenced by authentication rules).")
 
 
-class SecurityGroupSummary(BaseModel):
+class SecurityGroupSummary(IseResultModel):
     name: str = Field(..., description="TrustSec security group name (referenced by authorization rules).")
 
 
-class ServiceNameSummary(BaseModel):
+class ServiceNameSummary(IseResultModel):
     name: str = Field(..., description="Service name (referenced as a policy-set service identifier).")
     service_type: Optional[Literal["allowed_protocols", "server_sequence"]] = Field(
         None,
@@ -385,28 +387,28 @@ class ServiceNameSummary(BaseModel):
     )
 
 
-class IdentityStoresSection(BaseModel):
+class IdentityStoresSection(IseResultModel):
     total_count: int = Field(..., description="Total identity stores matching the filter.")
     count: int = Field(..., description="Number of items in `items` (after truncation).")
     has_more: bool = Field(..., description="True when `total_count > count`.")
     items: List[IdentityStoreSummary] = Field(..., description="Identity stores.")
 
 
-class SecurityGroupsSection(BaseModel):
+class SecurityGroupsSection(IseResultModel):
     total_count: int = Field(..., description="Total security groups matching the filter.")
     count: int = Field(..., description="Number of items in `items` (after truncation).")
     has_more: bool = Field(..., description="True when `total_count > count`.")
     items: List[SecurityGroupSummary] = Field(..., description="TrustSec security groups (SGTs).")
 
 
-class ServiceNamesSection(BaseModel):
+class ServiceNamesSection(IseResultModel):
     total_count: int = Field(..., description="Total service names matching the filter.")
     count: int = Field(..., description="Number of items in `items` (after truncation).")
     has_more: bool = Field(..., description="True when `total_count > count`.")
     items: List[ServiceNameSummary] = Field(..., description="Allowed-protocols and server-sequence services.")
 
 
-class PolicyAuthoringReferencesResult(BaseModel):
+class PolicyAuthoringReferencesResult(IseResultModel):
     """Result envelope for ``ise_list_policy_authoring_references``.
 
     Returns the three reference catalogs needed when authoring or auditing

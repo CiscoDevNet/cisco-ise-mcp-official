@@ -197,6 +197,17 @@ class TestFetchAuthListSessions:
 
     EMPTY_LIST_XML = '<?xml version="1.0"?><activeList noOfActiveSession="0"></activeList>'
 
+    # Real ISE sessions do not always populate every field. This session is
+    # missing <nas_ip_address> and <calling_station_id> entirely.
+    PARTIAL_SESSION_XML = """<?xml version="1.0"?>
+    <activeList noOfActiveSession="1">
+        <activeSession>
+            <user_name>test19</user_name>
+            <framed_ip_address>10.1.2.3</framed_ip_address>
+            <framed_ipv6_address/>
+        </activeSession>
+    </activeList>"""
+
     def _make_handler(self, xml_text):
         from tools.session_tool_handler import SessionToolHandler
 
@@ -221,6 +232,19 @@ class TestFetchAuthListSessions:
 
         sessions = await handler._fetch_auth_list_sessions(minutes=60)
         assert sessions == []
+
+    @pytest.mark.asyncio
+    async def test_session_missing_optional_fields_does_not_raise(self):
+        """A session missing nas_ip_address/calling_station_id must not fail
+        the whole list (real ISE returns partially-populated sessions)."""
+        handler, _ = self._make_handler(self.PARTIAL_SESSION_XML)
+
+        sessions = await handler._fetch_auth_list_sessions(minutes=60)
+        assert len(sessions) == 1
+        assert sessions[0].user_name == "test19"
+        assert sessions[0].nas_ip_address is None
+        assert sessions[0].calling_station_id is None
+        assert sessions[0].framed_ip_address == "10.1.2.3"
 
     @pytest.mark.asyncio
     async def test_endpoint_uses_authlist_with_null_end_time(self):

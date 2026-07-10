@@ -388,7 +388,7 @@ class TestPolicyContextResolverSerialization:
     """Tests that PolicyContext serializes correctly for MCP tool responses."""
 
     @pytest.mark.asyncio
-    async def test_model_dump_includes_none_fields(self):
+    async def test_model_dump_omits_none_fields(self):
         resolver, _ = _build_resolver()
 
         result = await resolver.resolve(
@@ -396,11 +396,13 @@ class TestPolicyContextResolverSerialization:
             authz_rule_name="Basic_Authenticated_Access",
         )
 
+        # IseResultModel drops None fields on serialization, matching the
+        # exclude_none wire contract the policy tools have always emitted.
         dumped = result.model_dump(mode="json")
         assert "policy_set" in dumped
         assert "authorization_rule" in dumped
-        assert dumped["authentication_rule"] is None
-        assert dumped["resolution_errors"] is None
+        assert "authentication_rule" not in dumped
+        assert "resolution_errors" not in dumped
 
     @pytest.mark.asyncio
     async def test_full_context_json_roundtrip(self):
@@ -417,7 +419,8 @@ class TestPolicyContextResolverSerialization:
         assert parsed["policy_set"]["name"] == "Default"
         assert parsed["policy_set"]["condition_summary"] == "Wired_802.1X"
         assert parsed["authentication_rule"]["identity_source_name"] == "Internal Users"
-        assert parsed["authentication_rule"]["condition_summary"] is None
+        # condition_summary is None here, so it is omitted (exclude_none contract).
+        assert "condition_summary" not in parsed["authentication_rule"]
         assert parsed["authorization_rule"]["profile"] == ["PermitAccess"]
         assert "condition_summary" in parsed["authorization_rule"]
 

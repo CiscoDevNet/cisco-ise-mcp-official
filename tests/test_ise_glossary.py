@@ -12,6 +12,8 @@ if str(PROJECT_DIR) not in sys.path:
 from resources.ise_glossary import (
     ISE_AUTH_FLOW,
     SESSION_IDENTIFIERS,
+    CERTIFICATE_GLOSSARY,
+    CERTIFICATE_DIAGNOSIS_GLOSSARY,
     DEFAULT_GLOSSARY,
     FAILURE_GLOSSARY,
     LATENCY_GLOSSARY,
@@ -161,6 +163,16 @@ class TestToolGlossaries:
         assert value == _compose(
             ISE_AUTH_FLOW, SESSION_IDENTIFIERS, SESSION_DETAILS_GLOSSARY, FAILURE_GLOSSARY
         )
+
+    def test_diagnose_certificate_issues_composition(self):
+        value = TOOL_GLOSSARIES["ise_diagnose_certificate_issues"]
+        assert CERTIFICATE_GLOSSARY in value
+        assert CERTIFICATE_DIAGNOSIS_GLOSSARY in value
+        assert value == _compose(CERTIFICATE_GLOSSARY, CERTIFICATE_DIAGNOSIS_GLOSSARY)
+        # The diagnosis-specific fields the base cert glossary does not cover.
+        assert "verdict:" in value
+        assert "coverage_note:" in value
+        assert "total_matches:" in value
 
     def test_values_use_double_newline_separator(self):
         for key in EXPECTED_TOOL_NAMES:

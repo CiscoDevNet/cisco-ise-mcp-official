@@ -114,6 +114,26 @@ CERTIFICATE_GLOSSARY: str = """\
 - earliest_expiration: Expiration date of the most urgent certificate in the returned set."""
 
 
+CERTIFICATE_DIAGNOSIS_GLOSSARY: str = """\
+## Certificate Diagnosis Fields
+- verdict: Overall certificate-health verdict. critical = at least one expired certificate OR at least one certificate/TLS error signal matched in ise-psc.log on a PSN node; warning = certificates expiring within the look-ahead window (none expired) and no log signals; healthy = nothing expiring/expired and no log signals.
+- expiry: The trusted-certificate expiry check result (see Trusted Certificate Fields and Summary Fields).
+- log_scan: Result of scanning ise-psc.log on PSN nodes for certificate/TLS error signals over the most recent 2-hour window. null when scan_logs was false.
+- checked_at: ISO 8601 timestamp (UTC) of when this diagnosis was performed.
+
+## Log Scan Fields
+- nodes: Per-PSN-node scan results.
+- hostname: The PSN node that was scanned.
+- status: ok = the node's ise-psc.log was fetched and scanned; unavailable = the log could not be fetched/parsed for that node.
+- matches: Up to 5 raw matched log lines (newest first) from the 2-hour window. A match indicates a certificate/TLS error signal such as an EAP-TLS/RADIUS handshake failure, Unknown CA, PKIX path-building error, OCSP callback, RADIUS certificate error code, or a certificate-management failure.
+- total_matches: Total matching lines seen in the window; may exceed the number of returned matches.
+- reason: Generic explanation when status is unavailable; null when ok.
+- psn_nodes_total: PSN nodes discovered as scan candidates.
+- psn_nodes_scanned: PSN nodes actually attempted (capped at 5).
+- psn_nodes_succeeded: PSN nodes whose log was successfully fetched and scanned.
+- coverage_note: Human-readable "scanned X of Y PSN node(s)" summary describing scan coverage."""
+
+
 def _compose(*sections: str) -> str:
     return "\n\n".join(sections)
 
@@ -125,6 +145,7 @@ TOOL_GLOSSARIES: dict[str, str] = {
     "sessions_search_with_latency_details": _compose(ISE_AUTH_FLOW, SESSION_IDENTIFIERS, SESSION_DETAILS_GLOSSARY, LATENCY_GLOSSARY),
     "ise_investigate_aaa_failure": _compose(ISE_AUTH_FLOW, SESSION_IDENTIFIERS, SESSION_DETAILS_GLOSSARY, FAILURE_GLOSSARY),
     "check_expiring_trusted_certificates": CERTIFICATE_GLOSSARY,
+    "ise_diagnose_certificate_issues": _compose(CERTIFICATE_GLOSSARY, CERTIFICATE_DIAGNOSIS_GLOSSARY),
     "ise_search_policy_sets": _compose(POLICY_GLOSSARY, POLICY_CONFIG_GLOSSARY),
     "ise_get_policy_set_details": _compose(POLICY_GLOSSARY, POLICY_CONFIG_GLOSSARY),
     "ise_search_authorization_rules": _compose(POLICY_GLOSSARY, POLICY_CONFIG_GLOSSARY),

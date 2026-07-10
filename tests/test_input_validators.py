@@ -399,3 +399,53 @@ class TestErrorPayloadStructure:
         data = json.loads(str(exc_info.value))
         assert "500" in data["message"]
         assert "100" in data["message"]
+
+
+class TestValidateHostname:
+    def test_valid_hostname_returned(self):
+        from utils.input_validators import validate_hostname
+        assert validate_hostname("vm218") == "vm218"
+
+    def test_valid_with_hyphen_and_digits(self):
+        from utils.input_validators import validate_hostname
+        assert validate_hostname("ise-node-01") == "ise-node-01"
+
+    def test_strips_whitespace(self):
+        from utils.input_validators import validate_hostname
+        assert validate_hostname("  vm218  ") == "vm218"
+
+    def test_must_start_with_letter(self):
+        from utils.input_validators import validate_hostname
+        import pytest
+        from fastmcp.exceptions import ToolError
+        with pytest.raises(ToolError):
+            validate_hostname("1node")
+
+    def test_rejects_dot(self):
+        # FQDN-style input is rejected; hostname only.
+        from utils.input_validators import validate_hostname
+        import pytest
+        from fastmcp.exceptions import ToolError
+        with pytest.raises(ToolError):
+            validate_hostname("vm218.marcos.com")
+
+    def test_rejects_filter_injection_chars(self):
+        from utils.input_validators import validate_hostname
+        import pytest
+        from fastmcp.exceptions import ToolError
+        with pytest.raises(ToolError):
+            validate_hostname("vm218.EQ.x&filter=y")
+
+    def test_rejects_too_long(self):
+        from utils.input_validators import validate_hostname
+        import pytest
+        from fastmcp.exceptions import ToolError
+        with pytest.raises(ToolError):
+            validate_hostname("a" * 65)
+
+    def test_rejects_empty(self):
+        from utils.input_validators import validate_hostname
+        import pytest
+        from fastmcp.exceptions import ToolError
+        with pytest.raises(ToolError):
+            validate_hostname("")

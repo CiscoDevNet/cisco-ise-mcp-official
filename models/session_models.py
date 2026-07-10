@@ -1,24 +1,25 @@
 # Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
 
 from typing import Optional, Literal, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from models.base import IseResultModel
 from models.policy_models import PolicyContext
 
 _SEARCH_FILTERS_DESC = "Search filters that were used to find sessions"
 
 
-class ActiveSession(BaseModel):
+class ActiveSession(IseResultModel):
     """
     Represents a single active session from the ISE MNT API.
     
     This model validates and structures the data from each <activeSession> element.
     """
     
-    user_name: str = Field(..., description="Username of the authenticated user")
-    calling_station_id: str = Field(..., description="MAC address of the endpoint")
-    nas_ip_address: str = Field(..., description="IP address of the Network Access Server (switch/AP)")
-    server: str = Field(..., description="ISE node handling the session")
+    user_name: Optional[str] = Field(None, description="Username of the authenticated user")
+    calling_station_id: Optional[str] = Field(None, description="MAC address of the endpoint")
+    nas_ip_address: Optional[str] = Field(None, description="IP address of the Network Access Server (switch/AP)")
+    server: Optional[str] = Field(None, description="ISE node handling the session")
     framed_ip_address: Optional[str] = Field(None, description="IP address assigned to the endpoint")
     framed_ipv6_address: Optional[str] = Field(None, description="IPv6 address assigned to the endpoint")
     audit_session_id: Optional[str] = Field(None, description="Audit session ID for the session")
@@ -27,7 +28,7 @@ class ActiveSession(BaseModel):
     
 
 
-class ActiveSessionList(BaseModel):
+class ActiveSessionList(IseResultModel):
     """
     Represents the complete response from the Session/ActiveList API.
     
@@ -38,7 +39,7 @@ class ActiveSessionList(BaseModel):
     sessions: List[ActiveSession] = Field(default_factory=list, description="List of active sessions")
 
 
-class ActiveSessionSearchResult(BaseModel):
+class ActiveSessionSearchResult(IseResultModel):
     """
     Represents the filtered search results from active sessions.
 
@@ -86,7 +87,7 @@ class ActiveSessionSearchResult(BaseModel):
     )
 
 
-class StepLatency(BaseModel):
+class StepLatency(IseResultModel):
     """A single step latency entry from the ISE StepLatency string.
 
     The step_index maps directly to the execution_steps array index
@@ -97,7 +98,7 @@ class StepLatency(BaseModel):
     latency_ms: int = Field(..., description="Latency in milliseconds for this step")
 
 
-class SessionDetail(BaseModel):
+class SessionDetail(IseResultModel):
     """
     Curated session details from the ISE MNT Last Session by Attributes API (sessionParameters XML).
     Contains 16 direct XML elements plus 6 key-value pairs extracted from other_attr_string.
@@ -126,14 +127,14 @@ class SessionDetail(BaseModel):
     steps_latencies: Optional[List[StepLatency]] = Field(None, description="Per-step latency with 1-based step index", exclude=True)
 
 
-class SessionDetailResult(BaseModel):
+class SessionDetailResult(IseResultModel):
     """
     Result of get_session_details: wraps a single SessionDetail.
     """
     session: SessionDetail = Field(..., description="Detailed session data from the ISE MNT API")
 
 
-class EnrichedSessionSearchResult(BaseModel):
+class EnrichedSessionSearchResult(IseResultModel):
     """
     Result of search_enriched_active_sessions: filters, counts, and list of enriched sessions.
     """
@@ -143,7 +144,7 @@ class EnrichedSessionSearchResult(BaseModel):
     sessions: List[SessionDetail] = Field(default_factory=list, description="List of sessions with detailed enrichment data")
 
 
-class SessionWithPolicyContext(BaseModel):
+class SessionWithPolicyContext(IseResultModel):
     """A single session paired with its resolved policy context."""
 
     session: SessionDetail = Field(..., description="Enriched session details")
@@ -151,7 +152,7 @@ class SessionWithPolicyContext(BaseModel):
     policy_context_note: Optional[str] = Field(None, description="Explanation when policy context could not be resolved")
 
 
-class PolicyEnrichedSessionSearchResult(BaseModel):
+class PolicyEnrichedSessionSearchResult(IseResultModel):
     """
     Result of sessions_search_with_policy_details:
     sessions enriched with both session details and full policy context.
@@ -162,7 +163,7 @@ class PolicyEnrichedSessionSearchResult(BaseModel):
     sessions: List[SessionWithPolicyContext] = Field(default_factory=list, description="Sessions with detailed enrichment and policy context")
 
 
-class ExecutionStep(BaseModel):
+class ExecutionStep(IseResultModel):
     """A single resolved execution step from the ISE authentication flow."""
 
     code: str = Field(..., description="Numeric message code from ISE execution steps", exclude=True)
@@ -170,7 +171,7 @@ class ExecutionStep(BaseModel):
     latency_ms: Optional[int] = Field(None, description="Latency in milliseconds for this step")
 
 
-class SessionWithLatencyContext(BaseModel):
+class SessionWithLatencyContext(IseResultModel):
     """A single session paired with its resolved execution steps."""
 
     session: SessionDetail = Field(..., description="Enriched session details")
@@ -178,7 +179,7 @@ class SessionWithLatencyContext(BaseModel):
     latency_context_note: Optional[str] = Field(None, description="Explanation when execution steps could not be resolved")
 
 
-class LatencyEnrichedSessionSearchResult(BaseModel):
+class LatencyEnrichedSessionSearchResult(IseResultModel):
     """
     Result of sessions_search_with_latency_details:
     sessions enriched with resolved execution step messages.

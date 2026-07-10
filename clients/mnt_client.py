@@ -37,28 +37,23 @@ _DEPLOYMENT_NODE_PATH = "/api/v1/deployment/node"
 _PRIMARY_MNT_FILTER = "roles.EQ.PrimaryMonitoring"
 
 # PAN host used for the one-time Deployment-API discovery call AND for
-# the PAN-fallback MnT base URL. Hardcoded on purpose:
+# the PAN-fallback MnT base URL. Sourced from ``settings.ise_ip`` (the
+# ``ISE_IP`` .env value), read dynamically at use-time so it reflects
+# the configured PAN address for the running environment (native host,
+# remote appliance, or container).
 #
-#   * The per-user ``X-ISE-Authorization`` header carries credentials
-#     that NVA captured from the user's login against the local PAN
-#     (the same physical host running this container). Those creds are
-#     valid ONLY on that PAN. Reading the host from an operator-editable
-#     ``.env`` (formerly ``settings.ise_ip``) lets a stale/wrong
-#     ``ISE_IP`` line point us at a different ISE node where the user's
-#     creds aren't valid -- the failure mode that motivated this change.
+# In a same-host container deployment where MCP shares the host with
+# the ISE PAN, set ``ISE_IP=host.docker.internal`` and publish
+# ``host.docker.internal: host-gateway`` in the compose ``extra_hosts``
+# so the name resolves to the host running the PAN. In all other
+# deployments set ``ISE_IP`` to the PAN's reachable IP or FQDN.
 #
-#   * In the appliance deployment MCP shares the host with the ISE PAN,
-#     so the conventional Docker/Podman bridge-gateway address
-#     ``host.docker.internal`` resolves to the PAN from inside the
-#     container. The MCP service's docker-compose entry MUST publish
-#     ``host.docker.internal: host-gateway`` in ``extra_hosts`` for
-#     this name to resolve. NVA already does the same (see
-#     ``ise-nva-container`` in
-#     ``ise-ai-infra/.../docker-compose.yml``).
-#
-# Deliberately NOT read from ``settings.ise_ip`` / .env. Override only
-# by editing this constant if you move MCP off the PAN host (rare).
-_PAN_HOST_FOR_MNT: str = "host.docker.internal"
+# NOTE: the per-user ``X-ISE-Authorization`` credential is only valid on
+# the PAN the user authenticated against; ``ISE_IP`` must therefore point
+# at that PAN, not at some other node in the deployment.
+def _pan_host_for_mnt() -> str:
+    """Return the PAN host for MnT/Deployment calls (from ``ISE_IP``)."""
+    return settings.ise_ip
 
 # Host-name allow-list applied to the FQDN we pull out of the Deployment
 # response before composing the new MnT base URL. Even though the value
@@ -135,12 +130,11 @@ class MNTClient:
         # that the deployment is standalone, i.e. no node holds the
         # PrimaryMonitoring role).
         #
-        # Built from the hardcoded ``_PAN_HOST_FOR_MNT``, NOT from
-        # ``settings.ise_ip``: see the constant's docstring for the
+        # Built from ``settings.ise_ip`` (the ``ISE_IP`` .env value) via
+        # ``_pan_host_for_mnt()``: see that function's docstring for the
         # rationale (the per-user credential is only valid on the PAN
-        # the user logged into via NVA, which is always the host
-        # running this container).
-        self._pan_base_url: str = self._compose_mnt_base_url(_PAN_HOST_FOR_MNT)
+        # the user logged into, which ``ISE_IP`` must point at).
+        self._pan_base_url: str = self._compose_mnt_base_url(_pan_host_for_mnt())
         # Effective base URL the next ``get()`` will use. Swapped to the
         # MnT-FQDN URL after a successful discovery; otherwise stays at
         # the PAN URL.
@@ -349,13 +343,11 @@ class MNTClient:
             return
 
         client = await self._get_client()
-        # Deployment-API discovery target. ``_PAN_HOST_FOR_MNT`` is
-        # hardcoded to the container-host bridge gateway so we always
-        # hit the PAN that minted the user's credential, regardless of
-        # whatever ``ISE_IP`` may be set to in .env. See the constant's
-        # docstring.
+        # Deployment-API discovery target. ``_pan_host_for_mnt()`` returns
+        # the configured PAN host (``ISE_IP``), which must point at the PAN
+        # that minted the user's credential. See the function's docstring.
         url = (
-            f"https://{_PAN_HOST_FOR_MNT}:{settings.api_port}"
+            f"https://{_pan_host_for_mnt()}:{settings.api_port}"
             f"{_DEPLOYMENT_NODE_PATH}"
         )
         # The Deployment API returns JSON. The MnT singleton client

@@ -2,6 +2,11 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes Cisco ISE API operations as agent-callable tools over Streamable HTTP.
 
+> **Beta (v0.1.0)** — This server is under active development. Tool names, input
+> schemas, and response shapes may change between releases. It is intended for
+> evaluation and supervised use; it is **not yet recommended for unsupervised
+> production automation**. Feedback and issue reports are very welcome.
+
 ## Overview
 
 This server provides Cisco ISE tools for live session search, AAA failure
@@ -12,6 +17,16 @@ tools, inspect their schemas, and call them from natural language prompts.
 
 - **Protocol:** Streamable HTTP
 - **Default URL:** `http://localhost:5000/mcp/`
+
+## Limitations
+
+- **Log fetching depends on a prior UI download.** Log data is retrieved through
+  ISE's web server (the UI download mechanism), not a dedicated log API. A given
+  log file can only be fetched if it has been **downloaded from the ISE UI at
+  least once before**; if that manual download was never performed, the log fetch
+  will not succeed. This does **not** break the tool — the affected tool still
+  returns its other results gracefully, and only the log-derived portion of the
+  output is unavailable.
 
 ## Pre-requisites
 
