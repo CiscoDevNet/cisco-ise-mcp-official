@@ -1,0 +1,276 @@
+from http import HTTPStatus
+from typing import Any, cast
+from urllib.parse import quote
+
+import httpx
+
+from ...client import AuthenticatedClient, Client
+from ...types import Response, UNSET
+from ... import errors
+
+from ...models.error import Error
+from ...models.policy_set import PolicySet
+from ...models.policy_set_response_entity import PolicySetResponseEntity
+from ...types import UNSET, Unset
+from typing import cast
+
+
+
+def _get_kwargs(
+    *,
+    body: PolicySet,
+    x_request_id: str | Unset = UNSET,
+
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+    if not isinstance(x_request_id, Unset):
+        headers["X-Request-ID"] = x_request_id
+
+
+
+    
+
+    
+
+    _kwargs: dict[str, Any] = {
+        "method": "post",
+        "url": "/network-access/policy-set",
+    }
+
+    _kwargs["json"] = body.to_dict()
+
+
+    headers["Content-Type"] = "application/json"
+
+    _kwargs["headers"] = headers
+    return _kwargs
+
+
+
+def _parse_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Error | PolicySetResponseEntity | None:
+    if response.status_code == 201:
+        response_201 = PolicySetResponseEntity.from_dict(response.json())
+
+
+
+        return response_201
+
+    if response.status_code == 400:
+        response_400 = Error.from_dict(response.json())
+
+
+
+        return response_400
+
+    if client.raise_on_unexpected_status:
+        raise errors.UnexpectedStatus(response.status_code, response.content)
+    else:
+        return None
+
+
+def _build_response(*, client: AuthenticatedClient | Client, response: httpx.Response) -> Response[Error | PolicySetResponseEntity]:
+    return Response(
+        status_code=HTTPStatus(response.status_code),
+        content=response.content,
+        headers=response.headers,
+        parsed=_parse_response(client=client, response=response),
+    )
+
+
+def sync_detailed(
+    *,
+    client: AuthenticatedClient | Client,
+    body: PolicySet,
+    x_request_id: str | Unset = UNSET,
+
+) -> Response[Error | PolicySetResponseEntity]:
+    """ Network Access - Create a new policy set.
+
+     Network Access - Create a new policy set:
+    <ul>
+    <li> Policy must include name , service identifier (either server sequence or allowed protocol) and
+    a condition. </li>
+    <li> Condition has hierarchical structure which define a set of condition for which policy could be
+    match. </li>
+    <li> Condition can be either reference to a stored Library condition, using model
+    <b>ConditionReference</b>,
+    or, dynamically built conditions which are not stored in the conditions Library, using models
+    <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+    <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is
+    incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section
+    below, which offers details on the properties required to construct a valid request body for each
+    condition model. Please note that the 'conditionType' property needs to be set according to the
+    chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of
+    the inner-layer conditions as well.</li>
+    </ul>
+
+    Args:
+        x_request_id (str | Unset):
+        body (PolicySet): Policy set structure
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[Error | PolicySetResponseEntity]
+     """
+
+
+    kwargs = _get_kwargs(
+        body=body,
+x_request_id=x_request_id,
+
+    )
+
+    response = client.get_httpx_client().request(
+        **kwargs,
+    )
+
+    return _build_response(client=client, response=response)
+
+def sync(
+    *,
+    client: AuthenticatedClient | Client,
+    body: PolicySet,
+    x_request_id: str | Unset = UNSET,
+
+) -> Error | PolicySetResponseEntity | None:
+    """ Network Access - Create a new policy set.
+
+     Network Access - Create a new policy set:
+    <ul>
+    <li> Policy must include name , service identifier (either server sequence or allowed protocol) and
+    a condition. </li>
+    <li> Condition has hierarchical structure which define a set of condition for which policy could be
+    match. </li>
+    <li> Condition can be either reference to a stored Library condition, using model
+    <b>ConditionReference</b>,
+    or, dynamically built conditions which are not stored in the conditions Library, using models
+    <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+    <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is
+    incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section
+    below, which offers details on the properties required to construct a valid request body for each
+    condition model. Please note that the 'conditionType' property needs to be set according to the
+    chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of
+    the inner-layer conditions as well.</li>
+    </ul>
+
+    Args:
+        x_request_id (str | Unset):
+        body (PolicySet): Policy set structure
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Error | PolicySetResponseEntity
+     """
+
+
+    return sync_detailed(
+        client=client,
+body=body,
+x_request_id=x_request_id,
+
+    ).parsed
+
+async def asyncio_detailed(
+    *,
+    client: AuthenticatedClient | Client,
+    body: PolicySet,
+    x_request_id: str | Unset = UNSET,
+
+) -> Response[Error | PolicySetResponseEntity]:
+    """ Network Access - Create a new policy set.
+
+     Network Access - Create a new policy set:
+    <ul>
+    <li> Policy must include name , service identifier (either server sequence or allowed protocol) and
+    a condition. </li>
+    <li> Condition has hierarchical structure which define a set of condition for which policy could be
+    match. </li>
+    <li> Condition can be either reference to a stored Library condition, using model
+    <b>ConditionReference</b>,
+    or, dynamically built conditions which are not stored in the conditions Library, using models
+    <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+    <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is
+    incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section
+    below, which offers details on the properties required to construct a valid request body for each
+    condition model. Please note that the 'conditionType' property needs to be set according to the
+    chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of
+    the inner-layer conditions as well.</li>
+    </ul>
+
+    Args:
+        x_request_id (str | Unset):
+        body (PolicySet): Policy set structure
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[Error | PolicySetResponseEntity]
+     """
+
+
+    kwargs = _get_kwargs(
+        body=body,
+x_request_id=x_request_id,
+
+    )
+
+    response = await client.get_async_httpx_client().request(
+        **kwargs
+    )
+
+    return _build_response(client=client, response=response)
+
+async def asyncio(
+    *,
+    client: AuthenticatedClient | Client,
+    body: PolicySet,
+    x_request_id: str | Unset = UNSET,
+
+) -> Error | PolicySetResponseEntity | None:
+    """ Network Access - Create a new policy set.
+
+     Network Access - Create a new policy set:
+    <ul>
+    <li> Policy must include name , service identifier (either server sequence or allowed protocol) and
+    a condition. </li>
+    <li> Condition has hierarchical structure which define a set of condition for which policy could be
+    match. </li>
+    <li> Condition can be either reference to a stored Library condition, using model
+    <b>ConditionReference</b>,
+    or, dynamically built conditions which are not stored in the conditions Library, using models
+    <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+    <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is
+    incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section
+    below, which offers details on the properties required to construct a valid request body for each
+    condition model. Please note that the 'conditionType' property needs to be set according to the
+    chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of
+    the inner-layer conditions as well.</li>
+    </ul>
+
+    Args:
+        x_request_id (str | Unset):
+        body (PolicySet): Policy set structure
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Error | PolicySetResponseEntity
+     """
+
+
+    return (await asyncio_detailed(
+        client=client,
+body=body,
+x_request_id=x_request_id,
+
+    )).parsed

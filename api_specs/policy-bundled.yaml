@@ -1,0 +1,4930 @@
+openapi: 3.0.2
+info:
+  title: Policy APIs
+  description: <p> Policy APIs for managing Policy Sets, authorization policies, authentication policies, and policy elements. <br> Policy API audit report can be found in ISE UI under Operations-> Reports -> Policy OpenApi Operations report. </p>
+  version: 1.0.0
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  contact:
+    email: cs-ise-api@cisco.com
+servers:
+  - url: https://{server}/v1/policy
+    variables:
+      server:
+        default: localhost
+        description: The host where the API is rooted
+security:
+  - BasicAuth: []
+paths:
+  /network-access/policy-set:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - List of policy sets.
+      description: Get all network access policy sets.
+      operationId: getNetworkAccessPolicySetList
+      tags:
+        - Network Access - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create a new policy set.
+      description: |
+        Network Access - Create a new policy set:
+        <ul>
+        <li> Policy must include name , service identifier (either server sequence or allowed protocol) and a condition. </li>
+        <li> Condition has hierarchical structure which define a set of condition for which policy could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b>,
+        or, dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+        <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createNetworkAccessPolicySet
+      tags:
+        - Network Access - Policy Sets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySet'
+            example:
+              name: My PolicySet
+              description: A new policySet
+              state: enabled
+              condition:
+                conditionType: ConditionAttributes
+                isNegate: false
+                dictionaryName: Network Access
+                attributeName: Device IP Address
+                operator: ipEquals
+                attributeValue: 10.0.10.0
+              serviceName: Default Network Access
+              isProxy: false
+      responses:
+        '201':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/policy-set/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for PolicySets
+      description: Network Access - Reset HitCount for PolicySets
+      operationId: resetHitCountsNetworkAccessPolicySets
+      tags:
+        - Network Access - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get policy set attributes.
+      description: Network Access - Get policy set attributes.
+      operationId: getNetworkAccessPolicySetById
+      tags:
+        - Network Access - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update a policy set.
+      description: Network Access - Update a policy set.
+      operationId: updateNetworkAccessPolicySetById
+      tags:
+        - Network Access - Policy Sets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySet'
+            example:
+              name: My PolicySet updated
+              description: A new policySet
+              state: enabled
+              condition:
+                conditionType: ConditionAttributes
+                isNegate: false
+                dictionaryName: Network Access
+                attributeName: Device IP Address
+                operator: ipEquals
+                attributeValue: 10.0.10.0
+              serviceName: Default Network Access
+              isProxy: false
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete a policy set.
+      description: Network Access - Delete a policy set.
+      operationId: deleteNetworkAccessPolicySetById
+      tags:
+        - Network Access - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authentication:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get authentication rules.
+      description: Network Access - Get authentication rules.
+      operationId: getNetworkAccessPolicyByIdAuthenticationRuleList
+      tags:
+        - Network Access - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create authentication rule.
+      description: |
+        Network Access - Create authentication rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authentication policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createNetworkAccessPolicyByIdAuthenticationRule
+      tags:
+        - Network Access - Authentication Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthentication'
+            example:
+              rule:
+                name: Authentication Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              identitySourceName: Internal Endpoints
+              ifAuthFail: reject
+              ifProcessFail: drop
+              ifUserNotFound: reject
+      responses:
+        '201':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authentication/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get rule attributes.
+      description: Network Access - Get rule attributes.
+      operationId: getNetworkAccessPolicyByIdAuthenticationRuleById
+      tags:
+        - Network Access - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update rule.
+      description: Network Access - Update rule.
+      operationId: updateNetworkAccessPolicyByIdAuthenticationRuleById
+      tags:
+        - Network Access - Authentication Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthentication'
+            example:
+              rule:
+                name: Authentication Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              identitySourceName: Internal Endpoints
+              ifAuthFail: reject
+              ifProcessFail: drop
+              ifUserNotFound: reject
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete rule.
+      description: Network Access - Delete rule.
+      operationId: deleteNetworkAccessPolicyByIdAuthenticationRuleById
+      tags:
+        - Network Access - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authentication/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for Authentication Rules
+      description: Network Access - Reset HitCount for Authentication Rules
+      operationId: resetHitCountsNetworkAccessPolicyByIdAuthenticationRules
+      tags:
+        - Network Access - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/exception:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get local exception rules.
+      description: Network Access - Get local exception rules.
+      operationId: getNetworkAccessPolicyByIdLocalExceptionRuleList
+      tags:
+        - Network Access - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create local authorization exception rule.
+      description: |
+        Network Access - Create local authorization exception rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createNetworkAccessPolicyByIdLocalExceptionRule
+      tags:
+        - Network Access - Authorization Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Local Exception Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - DenyAccess
+              securityGroup: BYOD
+      responses:
+        '201':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/exception/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get local exception rule attributes.
+      description: Network Access - Get local exception rule attributes.
+      operationId: getNetworkAccessPolicyByIdLocalExceptionRuleById
+      tags:
+        - Network Access - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update local exception rule.
+      description: Network Access - Update local exception rule.
+      operationId: updateNetworkAccessPolicyByIdLocalExceptionRuleById
+      tags:
+        - Network Access - Authorization Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Local Exception Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - DenyAccess
+              securityGroup: BYOD
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete local exception rule.
+      description: Network Access - Delete local exception rule.
+      operationId: deleteNetworkAccessPolicyByIdLocalExceptionRuleById
+      tags:
+        - Network Access - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/exception/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for local exceptions
+      description: Network Access - Reset HitCount for local exceptions
+      operationId: resetHitCountsNetworkAccessPolicyByIdLocalExceptions
+      tags:
+        - Network Access - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authorization:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get authorization rules.
+      description: Network Access - Get authorization rules.
+      operationId: getNetworkAccessPolicyByIdAuthorizationRuleList
+      tags:
+        - Network Access - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create authorization rule.
+      description: |
+        Network Access - Create authorization rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createNetworkAccessPolicyByIdAuthorizationRule
+      tags:
+        - Network Access - Authorization Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Authorization Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - PermitAccess
+              securityGroup: BYOD
+      responses:
+        '201':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authorization/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get authorization rule attributes.
+      description: Network Access - Get authorization rule attributes.
+      operationId: getNetworkAccessPolicyByIdAuthorizationRuleById
+      tags:
+        - Network Access - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update authorization rule.
+      description: Network Access - Update authorization rule.
+      operationId: updateNetworkAccessPolicyByIdAuthorizationRuleById
+      tags:
+        - Network Access - Authorization Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Authorization Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - PermitAccess
+              securityGroup: BYOD
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete authorization rule.
+      description: Network Access - Delete authorization rule.
+      operationId: deleteNetworkAccessPolicyByIdAuthorizationRuleById
+      tags:
+        - Network Access - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/authorization/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for Authorization Rules
+      description: Network Access - Reset HitCount for Authorization Rules
+      operationId: resetHitCountsNetworkAccessPolicyByIdAuthorizationRules
+      tags:
+        - Network Access - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/global-exception:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get global execption rules.
+      description: Network Access - Get global execption rules.
+      operationId: getNetworkAccessPolicySetGlobalExceptionRuleList
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create global exception authorization rule.
+      description: |
+        Network Access - Create global exception authorization rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createNetworkAccessPolicySetGlobalExceptionRule
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Global Exception Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - DenyAccess
+              securityGroup: BYOD
+      responses:
+        '201':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/global-exception/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get global exception rule attributes.
+      description: Network Access - Get global exception rule attributes.
+      operationId: getNetworkAccessPolicySetGlobalExceptionRuleById
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update global exception authorization rule.
+      description: Network Access - Update global exception authorization rule.
+      operationId: updateNetworkAccessPolicySetGlobalExceptionRuleById
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+            example:
+              rule:
+                name: Global Exception Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Normalised Radius
+                  attributeName: RadiusFlowType
+                  operator: equals
+                  attributeValue: Wireless802_1x
+              profile:
+                - DenyAccess
+              securityGroup: BYOD
+      responses:
+        '200':
+          $ref: '#/components/responses/NetworkAccessAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete global exception authorization rule.
+      description: Network Access - Delete global exception authorization rule.
+      operationId: deleteNetworkAccessPolicySetGlobalExceptionRuleById
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/global-exception/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for Global Exceptions
+      description: Network Access - Reset HitCount for Global Exceptions
+      operationId: resetHitCountsNetworkAccessGlobalExceptions
+      tags:
+        - Network Access - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/security-groups:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Return list of available security groups for authorization policy definition.
+      description: <p>Network Access - Return list of available security groups for authorization policy definition.<br> (Other CRUD APIs available throught ERS)<br></p>
+      operationId: getNetworkAccessSecurityGroups
+      tags:
+        - Network Access - Security Groups
+      responses:
+        '200':
+          description: list of security groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SecurityGroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/identity-stores:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Return list of identity stores for authentication policy definition.
+      description: <p>Network Access - Return list of identity stores for authentication policy definition.<br> (Other CRUD APIs available throught ERS)<br></p>
+      operationId: getNetworkAccessIdentityStores
+      tags:
+        - Network Access - Identity Stores
+      responses:
+        '200':
+          description: list of identity stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/service-names:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of allowed protocols and server sequences for Policy Set.
+      description: <p>Returns list of Allowed Protocols and Server Sequences for Network Access Policy Set results. <br> 'isLocalAuthorization' property is available only for Network Access Policy Set results of type Server Sequence. <br> (Other CRUD APIs available throught ERS)<br></p>
+      operationId: getNetworkAccessServiceNames
+      tags:
+        - Network Access - Service Names
+      responses:
+        '200':
+          description: list of allowed protocols and server sequences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceName'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/authorization-profiles:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of authorization profiles.
+      description: <p>Network Access - Returns list of authorization profiles.<br> (Other CRUD APIs available throught ERS)<br></p>
+      operationId: getNetworkAccessProfiles
+      tags:
+        - Network Access - Authorization Profiles
+      responses:
+        '200':
+          description: list of authoirzation profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns all library conditions
+      description: Network Access - Returns all library conditions
+      operationId: getNetworkAccessConditions
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Creates a library condition.
+      description: |
+        Network Access - Creates a library condition:
+        <ul>
+        <li> Library Condition has hierarchical structure which define a set of condition for which authentication and authorization policy rules could be match.</li>
+        <li> Condition can be composed either from a single dictionary-attribute name and value pair using model <b>LibraryConditionAttributes</b>, or from a combination of 2 or more conditions with a logical relation (e.g AND/OR) using models: <b>LibraryConditionAndBlock</b> or <b>LibraryConditionOrBlock</b>.</li>
+        <li> When using AND/OR blocks, the condition will include inner layers inside these blocks, these layers should be built using the inner condition models: <b>ConditionAttributes</b>, <b>ConditionAndBlock</b>, <b>ConditionOrBlock</b>; these represent dynamically built Conditions which do not get stored in the conditions Library, or using <b>ConditionReference</b>, which includes an ID of an existing condition which is in the library.</li>
+        <li> The LibraryCondition models can only be used in the outer-most layer (root of the condition) and must always include the condition name.</li>
+        <li> When using one of the 3 inner-layers condition models (<b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>), condition name cannot be included in the request, since these will not be stored in the conditions library, and used only as inner members of the root condition.</li>
+        <li> When using <b>ConditionReference</b> model in inner layers, the condition name is not required.</li>
+        <li> ConditionReference objects can also include a reference ID to a condition of type <b>TimeAndDate</b>.</li>
+        <li> <b>NOTE:</b> The request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: postNetworkAccessCondition
+      tags:
+        - Network Access - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: My Condition
+              description: Match only radius requests with PAP auth
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: AuthenticationMethod
+              operator: equals
+              attributeValue: PAP_ASCII
+      responses:
+        '201':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/condition/policyset:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of library conditions for PolicySet scope.
+      description: Network Access - Returns list of library conditions for PolicySet scope.
+      operationId: getNetworkAccessConditionsForPolicySet
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/condition/authentication:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of library conditions for Authentication rules scope.
+      description: Network Access - Returns list of library conditions for Authentication rules scope.
+      operationId: getNetworkAccessConditionsForAuthenticationRule
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/condition/authorization:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of library conditions for Authorization rules scope.
+      description: Network Access - Returns list of library conditions for Authorization rules scope.
+      operationId: getNetworkAccessConditionsForAuthorizationRule
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a library condition.
+      description: Network Access - Returns a library condition.
+      operationId: getNetworkAccessConditionByConditionId
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update library condition.
+      description: Network Access - Update library condition.
+      operationId: putNetworkAccessConditionByConditionId
+      tags:
+        - Network Access - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: My Condition
+              description: Updated condition, Match only radius requests with PAP auth
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: AuthenticationMethod
+              operator: notEquals
+              attributeValue: PAP_ASCII
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete a library condition.
+      description: Network Access - Delete a library condition.
+      operationId: deleteNetworkAccessConditionByConditionId
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/condition/condition-by-name/{conditionName}:
+    parameters:
+      - in: path
+        name: conditionName
+        required: true
+        schema:
+          type: string
+        description: Condition name
+        example: Wired_MAB
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a library condition.
+      description: Network Access - Returns a library condition.
+      operationId: getNetworkAccessConditionByConditionName
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete a library condition by condition Name.
+      description: Network Access - Delete a library condition using condition Name.
+      operationId: deleteNetworkAccessConditionByConditionName
+      tags:
+        - Network Access - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update library condition by condition name.
+      description: Network Access - Update library condition using condition name.
+      operationId: putNetworkAccessConditionByConditionName
+      tags:
+        - Network Access - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: My Condition by name
+              description: My UPDATED condition by name description
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: AuthenticationMethod
+              operator: notEquals
+              attributeValue: PAP_ASCII
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/network-condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a list of network conditions.
+      description: Network Access - Returns a list of network conditions.
+      operationId: getNetworkAccessNetworkConditions
+      tags:
+        - Network Access - Network Conditions
+      responses:
+        '200':
+          description: list of network conditions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionListResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Creates network condition.
+      description: Network Access - Creates network condition.
+      operationId: postNetworkAccessNetworkCondition
+      tags:
+        - Network Access - Network Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkCondition'
+            example:
+              name: Endstation condition 2
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 1.1.1.1
+                - 2.2.2.2
+              macAddrList:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/network-condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a network condition.
+      description: Network Access - Returns a network condition.
+      operationId: getNetworkAccessNetworkConditionByConditionId
+      tags:
+        - Network Access - Network Conditions
+      responses:
+        '200':
+          description: Network condition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update network condition.
+      description: Network Access - Update network condition.
+      operationId: putNetworkAccessNetworkConditionByConditionId
+      tags:
+        - Network Access - Network Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkCondition'
+            example:
+              name: Endstation condition 2 updated
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 1.1.1.1
+                - 2.2.2.2
+              macAddrList:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete network condition.
+      description: Network Access - Delete network condition.
+      operationId: deleteNetworkAccessNetworkConditionByConditionId
+      tags:
+        - Network Access - Network Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/time-condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a list of time and date conditions.
+      description: Network Access - Returns a list of time and date conditions.
+      operationId: getNetworkAccessTimeConditions
+      tags:
+        - Network Access - Time/Date Conditions
+      responses:
+        '200':
+          description: list of time/date conditions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionListResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Creates time/date condition.
+      description: Network Access - Creates time/date condition
+      operationId: postNetworkAccessTimeCondition
+      tags:
+        - Network Access - Time/Date Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeAndDateCondition'
+            example:
+              name: Time condition 1
+              conditionType: TimeAndDateCondition
+              isNegate: false
+              description: Optional description
+              hours:
+                startTime: '8:10'
+                endTime: '15:10'
+              weekDays:
+                - Sunday
+                - Tuesday
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/time-condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - returns a network condition.
+      description: Network Access - returns a network condition.
+      operationId: getNetworkAccessTimeConditionByConditionId
+      tags:
+        - Network Access - Time/Date Conditions
+      responses:
+        '200':
+          description: Network condition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update network condition.
+      description: Network Access - Update network condition
+      operationId: putNetworkAccessTimeConditionByConditionId
+      tags:
+        - Network Access - Time/Date Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeAndDateCondition'
+            example:
+              name: Time condition 1 updated
+              conditionType: TimeAndDateCondition
+              isNegate: false
+              description: Optional description
+              datesRange:
+                startDate: '2025-05-10'
+                endDate: '2025-06-10'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete Time/Date condition.
+      description: Network Access - Delete Time/Date condition.
+      operationId: deleteNetworkAccessTimeConditionByConditionId
+      tags:
+        - Network Access - Time/Date Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/dictionaries:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns a list of Dictionaries.
+      description: Get all Dictionaries.
+      operationId: getNetworkAccessDictionaries
+      tags:
+        - Network Access - Dictionaries
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create a new Dictionary.
+      description: Network Access - Create a new Dictionary.
+      operationId: postNetworkAccessDictionaries
+      tags:
+        - Network Access - Dictionaries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dictionary'
+            example:
+              name: My Dictionary
+              description: My new dictionary description
+              version: '1'
+              dictionaryAttrType: MSG_ATTR
+      responses:
+        '201':
+          $ref: '#/components/responses/DictionaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /network-access/dictionaries/{name}:
+    parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          type: string
+        description: the dictionary name
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: GET a dictionary by name
+      description: GET a dictionary by name
+      operationId: getNetworkAccessDictionary
+      tags:
+        - Network Access - Dictionaries
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update a Dictionary.
+      description: Network Access - Update a Dictionary.
+      operationId: putNetworkAccessDictionariesByName
+      tags:
+        - Network Access - Dictionaries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dictionary'
+            example:
+              example: null
+              name: My Dictionary
+              description: My UPDATED dictionary description
+              version: '1'
+              dictionaryAttrType: MSG_ATTR
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete a Dictionary.
+      description: Network Access - Delete a Dictionary.
+      operationId: deleteNetworkAccessDictionariesByName
+      tags:
+        - Network Access - Dictionaries
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/dictionaries/{dictionaryName}/attribute:
+    parameters:
+      - in: path
+        name: dictionaryName
+        required: true
+        schema:
+          type: string
+        description: the name of the dictionary the dictionary attribute belongs to
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Returns a list of Dictionary Attributes for an existing Dictionary.
+      description: Returns a list of Dictionary Attributes for an existing Dictionary.
+      operationId: getNetworkAccessDictionaryAttributesByDictionaryName
+      tags:
+        - Network Access - Dictionary Attributes
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Create a new Dictionary Attribute for an existing Dictionary.
+      description: Create a new Dictionary Attribute for an existing Dictionary.
+      operationId: postNetworkAccessDictionariesByDictionaryNameAttribute
+      tags:
+        - Network Access - Dictionary Attributes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictionaryAttribute'
+            example:
+              directionType: BOTH
+              name: MyAttribute
+              internalName: MyAttribute
+              description: My Attribute description
+              dataType: STRING
+              allowedValues:
+                - key: key1
+                  value: value1
+                  isDefault: false
+      responses:
+        '201':
+          $ref: '#/components/responses/DictionaryAttributeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/dictionaries/{dictionaryName}/attribute/{attributeName}:
+    parameters:
+      - in: path
+        name: attributeName
+        required: true
+        schema:
+          type: string
+        description: the dictionary attribute name
+      - in: path
+        name: dictionaryName
+        required: true
+        schema:
+          type: string
+        description: the name of the dictionary the dictionary attribute belongs to
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Get a Dictionary Attribute.
+      description: Get a Dictionary Attribute.
+      operationId: getNetworkAccessDictionariesByDictionaryNameAttributeByAttributeName
+      tags:
+        - Network Access - Dictionary Attributes
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Update a Dictionary Attribute.
+      description: Update a Dictionary Attribute
+      operationId: putNetworkAccessDictionariesByDictionaryNameAttributeByAttributeName
+      tags:
+        - Network Access - Dictionary Attributes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictionaryAttribute'
+            example:
+              directionType: BOTH
+              name: MyAttribute
+              internalName: MyAttribute
+              description: My UPDATED Attribute description
+              dataType: STRING
+              allowedValues:
+                - key: key2
+                  value: value2
+                  isDefault: false
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      summary: Delete a Dictionary Attribute.
+      description: Delete a Dictionary Attribute.
+      operationId: deleteNetworkAccessDictionariesByDictionaryNameAttributeByAttributeName
+      tags:
+        - Network Access - Dictionary Attributes
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/dictionaries/authentication:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for authentication.
+      description: Network Access - Returns list of dictionary attributes for authentication.
+      operationId: getNetworkAccessDictionariesAuthentication
+      tags:
+        - Network Access - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/dictionaries/authorization:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for authorization.
+      description: Network Access - Returns list of dictionary attributes for authorization.
+      operationId: getNetworkAccessDictionariesAuthorization
+      tags:
+        - Network Access - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /network-access/dictionaries/policyset:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for policyset.
+      description: Network Access - Returns list of dictionary attributes for policyset.
+      operationId: getNetworkAccessDictionariesPolicyset
+      tags:
+        - Network Access - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/policy-set:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - List of policy sets.
+      description: Device Admin - List of policy sets.
+      operationId: getDeviceAdminPolicySetList
+      tags:
+        - Device Administration - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create a new policy set.
+      description: |
+        Device Admin - Create a new policy set:
+        <ul>
+        <li> Policy must include name , service identifier (either server sequence or allowed protocol) and a condition. </li>
+        <li> Condition has hierarchical structure which define a set of condition for which policy could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b>,
+        or, dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>.</li>
+        <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createDeviceAdminPolicySet
+      tags:
+        - Device Administration - Policy Sets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySet'
+            example:
+              name: My PolicySet
+              description: A new policySet
+              state: enabled
+              condition:
+                conditionType: ConditionAttributes
+                isNegate: false
+                dictionaryName: DEVICE
+                attributeName: IPSEC
+                operator: equals
+                attributeValue: Is IPSEC Device
+              serviceName: Default Network Access
+              isProxy: false
+      responses:
+        '201':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/policy-set/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for PolicySets
+      description: Device Admin - Reset HitCount for PolicySets
+      operationId: resetHitCountsDeviceAdminPolicySets
+      tags:
+        - Device Administration - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get policy set attributes.
+      description: Device Admin - Get policy set attributes.
+      operationId: getDeviceAdminPolicySetById
+      tags:
+        - Device Administration - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update a policy set.
+      description: Device Admin - Update a policy set.
+      operationId: updateDeviceAdminPolicySetById
+      tags:
+        - Device Administration - Policy Sets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicySet'
+            example:
+              name: My PolicySet updated
+              description: A new policySet
+              state: enabled
+              condition:
+                conditionType: ConditionAttributes
+                isNegate: false
+                dictionaryName: DEVICE
+                attributeName: IPSEC
+                operator: equals
+                attributeValue: Is IPSEC Device
+              serviceName: Default Network Access
+              isProxy: false
+      responses:
+        '200':
+          $ref: '#/components/responses/PolicySetResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete a policy set.
+      description: Device Admin - Delete a policy set.
+      operationId: deleteDeviceAdminPolicySetById
+      tags:
+        - Device Administration - Policy Sets
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authentication:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get authentication rules.
+      description: Device Admin - Get authentication rules.
+      operationId: getDeviceAdminPolicyByIdAuthenticationRuleList
+      tags:
+        - Device Administration - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create authentication rule.
+      description: |
+        Device Admin - Create authentication rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authentication policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+        <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createDeviceAdminPolicyByIdAuthenticationRule
+      tags:
+        - Device Administration - Authentication Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthentication'
+            example:
+              rule:
+                name: Authentication Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: EapAuthentication
+                  operator: equals
+                  attributeValue: EAP-MSCHAPv2
+              identitySourceName: Internal Endpoints
+              ifAuthFail: reject
+              ifProcessFail: drop
+              ifUserNotFound: reject
+      responses:
+        '201':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authentication/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for Authentication Rules
+      description: Device Admin - Reset HitCount for Authentication Rules
+      operationId: resetHitCountsDeviceAdminPolicyByIdAuthenticationRules
+      tags:
+        - Device Administration - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authentication/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get rule attributes.
+      description: Device Admin - Get rule attributes.
+      operationId: getDeviceAdminPolicyByIdAuthenticationRuleById
+      tags:
+        - Device Administration - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - - Update rule.
+      description: Device Admin - - Update rule.
+      operationId: updateDeviceAdminPolicyByIdAuthenticationRuleById
+      tags:
+        - Device Administration - Authentication Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthentication'
+            example:
+              rule:
+                name: Authentication Rule 1 updated
+                rank: 1
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: EapAuthentication
+                  operator: equals
+                  attributeValue: EAP-MSCHAPv2
+              identitySourceName: Internal Endpoints
+              ifAuthFail: reject
+              ifProcessFail: drop
+              ifUserNotFound: reject
+      responses:
+        '200':
+          $ref: '#/components/responses/AuthenticationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete rule.
+      description: Device Admin - Delete rule.
+      operationId: deleteDeviceAdminPolicyByIdAuthenticationRuleById
+      tags:
+        - Device Administration - Authentication Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/exception:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get local exception rules.
+      description: Device Admin - Get local exception rules.
+      operationId: getDeviceAdminPolicyByIdLocalExceptionRuleList
+      tags:
+        - Device Administration - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create local authorization exception rule.
+      description: |
+        Device Admin - Create local authorization exception rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+        <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createDeviceAdminPolicyByIdLocalExceptionRule
+      tags:
+        - Device Administration - Authorization Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Local Exception Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: TACACS
+                  attributeName: Port
+                  operator: equals
+                  attributeValue: 5000
+              commands:
+                - DenyAllCommands
+      responses:
+        '201':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/exception/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for local exceptions
+      description: Device Admin - Reset HitCount for local exceptions
+      operationId: resetHitCountsDeviceAdminPolicyByIdLocalExceptions
+      tags:
+        - Device Administration - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/exception/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      tags:
+        - Device Administration - Authorization Exception Rules
+      summary: Device Admin - Get local exception rule attributes.
+      description: Device Admin - Get local exception rule attributes.
+      operationId: getDeviceAdminPolicyByIdLocalExceptionRuleById
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update local exception rule.
+      description: Device Admin - Update local exception rule.
+      operationId: updateDeviceAdminPolicyByIdLocalExceptionRuleById
+      tags:
+        - Device Administration - Authorization Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Local Exception Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: TACACS
+                  attributeName: Port
+                  operator: equals
+                  attributeValue: 5000
+              commands:
+                - DenyAllCommands
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete local exception rule.
+      description: Device Admin - Delete local exception rule.
+      operationId: deleteDeviceAdminPolicyByIdLocalExceptionRuleById
+      tags:
+        - Device Administration - Authorization Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authorization:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get authorization rules.
+      description: Device Admin - Get authorization rules.
+      operationId: getDeviceAdminPolicyByIdAuthorizationRuleList
+      tags:
+        - Device Administration - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create authorization rule.
+      description: |
+        Device Admin - Create authorization rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createDeviceAdminPolicyByIdAuthorizationRule
+      tags:
+        - Device Administration - Authorization Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Authorization Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: DEVICE
+                  attributeName: Device Type
+                  operator: equals
+                  attributeValue: All Device Types
+              commands:
+                - DenyAllCommands
+      responses:
+        '201':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authorization/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for Authorization Rules
+      description: Device Admin - Reset HitCount for Authorization Rules
+      operationId: resetHitCountsDeviceAdminPolicyByIdAuthorizationRules
+      tags:
+        - Device Administration - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/authorization/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get authorization rule attributes.
+      description: Device Admin - Get authorization rule attributes.
+      operationId: getDeviceAdminPolicyByIdAuthorizationRuleById
+      tags:
+        - Device Administration - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update authorization rule.
+      description: Device Admin - Update authorization rule.
+      operationId: updateDeviceAdminPolicyByIdAuthorizationRuleById
+      tags:
+        - Device Administration - Authorization Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Authorization Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: DEVICE
+                  attributeName: Device Type
+                  operator: equals
+                  attributeValue: All Device Types
+              commands:
+                - DenyAllCommands
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete authorization rule.
+      description: Device Admin - Delete authorization rule.
+      operationId: deleteDeviceAdminPolicyByIdAuthorizationRuleById
+      tags:
+        - Device Administration - Authorization Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/global-exception:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get global execption rules.
+      description: Device Admin - Get global execption rules.
+      operationId: getDeviceAdminPolicySetGlobalExceptionRuleList
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create global exception authorization rule.
+      description: |
+        Device Admin - Create global exception authorization rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authoriztion policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+         <li> <b>NOTE:</b> The condition property in the request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: createDeviceAdminPolicySetGlobalException
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Global Exception Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: TACACS
+                  attributeName: Port
+                  operator: equals
+                  attributeValue: 5000
+              commands:
+                - DenyAllCommands
+      responses:
+        '201':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/global-exception/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for Global Exceptions
+      description: Device Admin - Reset HitCount for Global Exceptions
+      operationId: resetHitCountsDeviceAdminGlobalExceptions
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/global-exception/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get global exception rule attributes.
+      description: Device Admin - Get global exception rule attribute
+      operationId: getDeviceAdminPolicySetGlobalExceptionByRuleId
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update global exception authorization rule.
+      description: Device Admin - Update global exception authorization rule.
+      operationId: putDeviceAdminPolicySetGlobalExceptionByRuleId
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+            example:
+              rule:
+                name: Global Exception Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: TACACS
+                  attributeName: Port
+                  operator: equals
+                  attributeValue: 5000
+              commands:
+                - DenyAllCommands
+      responses:
+        '200':
+          $ref: '#/components/responses/DeviceAdminAuthorizationRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete global exception authorization rule.
+      description: Device Admin - Delete global exception authorization rule.
+      operationId: deleteDeviceAdminPolicysetGlobalExceptionByRuleId
+      tags:
+        - Device Administration - Authorization Global Exception Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/mfa:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get MFA rules.
+      description: Network Access - Get MFA rules.
+      operationId: getNetworkAccessPolicyByIdMfaRuleList
+      tags:
+        - Network Access - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Network Access - Create MFA rule.
+      description: |
+        Network Access - Create MFA rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authentication policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+        </ul>
+      operationId: createNetworkAccessPolicyByIdMfaRule
+      tags:
+        - Network Access - MFA Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleMfa'
+            example:
+              rule:
+                name: MFA Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              mfaConnectionName: Connection Name
+              mfaResultAction: ACCEPT
+              mfaFailAction: REJECT
+      responses:
+        '201':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/mfa/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Get rule attributes.
+      description: Network Access - Get rule attributes.
+      operationId: getNetworkAccessPolicyByIdMfaRuleById
+      tags:
+        - Network Access - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Network Access - Update rule.
+      description: Network Access - Update rule.
+      operationId: updateNetworkAccessPolicyByIdMfaRuleById
+      tags:
+        - Network Access - MFA Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleMfa'
+            example:
+              rule:
+                name: MFA Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              mfaConnectionName: Connection Name
+              mfaResultAction: ACCEPT
+              mfaFailAction: REJECT
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Network Access - Delete rule.
+      description: Network Access - Delete rule.
+      operationId: deleteNetworkAccessPolicyByIdMfaRuleById
+      tags:
+        - Network Access - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /network-access/policy-set/{policyId}/mfa/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Network Access - Reset HitCount for MFA Rules
+      description: Network Access - Reset HitCount for MFA Rules
+      operationId: resetHitCountsNetworkAccessPolicyByIdMfaRules
+      tags:
+        - Network Access - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of library conditions.
+      description: Device Admin - Returns list of library conditions.
+      operationId: getDeviceAdminConditions
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Creates a library condition.
+      description: |
+        Device Admin - Creates a library condition:
+        <ul>
+        <li> Library Condition has hierarchical structure which define a set of condition for which authentication and authorization policy rules could be match.</li>
+        <li> Condition can be composed either from a single dictionary-attribute name and value pair using model <b>LibraryConditionAttributes</b>, or from a combination of 2 or more conditions with a logical relation (e.g AND/OR) using models: <b>LibraryConditionAndBlock</b> or <b>LibraryConditionOrBlock</b>.</li>
+        <li> When using AND/OR blocks, the condition will include inner layers inside these blocks, these layers should be built using the inner condition models: <b>ConditionAttributes</b>, <b>ConditionAndBlock</b>, <b>ConditionOrBlock</b>; these represent dynamically built Conditions which do not get stored in the conditions Library, or using <b>ConditionReference</b>, which includes an ID of an existing condition which is in the library.</li>
+        <li> The LibraryCondition models can only be used in the outer-most layer (root of the condition) and must always include the condition name.</li>
+        <li> When using one of the 3 inner-layers condition models (<b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>), condition name cannot be included in the request, since these will not be stored in the conditions library, and used only as inner members of the root condition.</li>
+        <li> When using <b>ConditionReference</b> model in inner layers, the condition name is not required.</li>
+        <li> ConditionReference objects can also include a reference ID to a condition of type <b>TimeAndDate</b>.</li>
+        <li> <b>NOTE:</b> The request body example provided in the Swagger UI is incomplete and cannot be used for creating a valid resource. Please refer to the 'Schema' section below, which offers details on the properties required to construct a valid request body for each condition model. Please note that the 'conditionType' property needs to be set according to the chosen model for each condition; In case of condition blocks (AND/OR), it is required for each of the inner-layer conditions as well.</li>
+        </ul>
+      operationId: postDeviceAdminCondition
+      tags:
+        - Device Administration - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: Tacacs Condition
+              description: My TACACS Condition Description
+              dictionaryName: Network Access
+              attributeName: EapAuthentication
+              operator: notEquals
+              attributeValue: EAP-TLS
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+      responses:
+        '201':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/condition/policyset:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of library conditions for policy sets.
+      description: Device Admin - Returns list of library conditions for policy sets.
+      operationId: getDeviceAdminConditionsForPolicySet
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/condition/authentication:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of library conditions for authentication rules.
+      description: Device Admin - Returns list of library conditions for authentication rules.
+      operationId: getDeviceAdminConditionsForAuthenticationRule
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/condition/authorization:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of library conditions for authorization rules.
+      description: Device Admin - Returns list of library conditions for authorization rules.
+      operationId: getDeviceAdminConditionsForAuthorizationRule
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a library condition.
+      description: Device Admin - Returns a library condition.
+      operationId: getDeviceAdminConditionByConditionId
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update library condition.
+      description: Device Admin - Update library condition.
+      operationId: putDeviceAdminConditionByConditionId
+      tags:
+        - Device Administration - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: Tacacs Condition
+              description: My UPDATED TACACS Condition description
+              dictionaryName: Network Access
+              attributeName: EapAuthentication
+              operator: equals
+              attributeValue: EAP-TLS
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete a library condition.
+      description: Device Admin - Delete a library condition.
+      operationId: deleteDeviceAdminConditionByConditionId
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/condition/condition-by-name/{conditionName}:
+    parameters:
+      - in: path
+        name: conditionName
+        required: true
+        schema:
+          type: string
+        description: Condition name
+        example: Wired_MAB
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a library condition.
+      description: Device Admin - Returns a library condition.
+      operationId: getDeviceAdminConditionByConditionName
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete a library condition by condition Name.
+      description: NDevice Admin - Delete a library condition using condition Name.
+      operationId: deleteDeviceAdminConditionByConditionName
+      tags:
+        - Device Administration - Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update library condition by condition name.
+      description: Device Admin - Update library condition using condition name.
+      operationId: putDeviceAdminConditionByConditionName
+      tags:
+        - Device Administration - Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Condition'
+            example:
+              name: My Condition by name
+              description: My UPDATED condition by name
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: EapAuthentication
+              operator: notEquals
+              attributeValue: EAP-TLS
+      responses:
+        '200':
+          $ref: '#/components/responses/LibraryConditionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/network-condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a list of network conditions.
+      description: Device Admin - Returns a list of network conditions.
+      operationId: getDeviceAdminNetworkConditions
+      tags:
+        - Device Administration - Network Conditions
+      responses:
+        '200':
+          description: list of network conditions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionListResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin- Creates network condition.
+      description: Device Admin- Creates network condition.
+      operationId: postDeviceAdminNetworkCondition
+      tags:
+        - Device Administration - Network Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkCondition'
+            example:
+              name: My Endstation condition
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 1.1.1.1
+              macAddrList:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+              cliDnisList: null
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/network-condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a network condition.
+      description: Device Admin - Returns a network condition.
+      operationId: getDeviceAdminNetworkConditionByConditionId
+      tags:
+        - Device Administration - Network Conditions
+      responses:
+        '200':
+          description: Network condition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update network condition.
+      description: Device Admin - Update network condition.
+      operationId: putDeviceAdminNetworkConditionByConditionId
+      tags:
+        - Device Administration - Network Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NetworkCondition'
+            example:
+              name: My Updated Endstation condition
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 1.1.1.1
+              macAddrList:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+              cliDnisList: null
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete network condition.
+      description: Device Admin - Delete network condition.
+      operationId: deleteDeviceAdminNetworkConditionByConditionId
+      tags:
+        - Device Administration - Network Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/time-condition:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a list of time and date conditions.
+      description: Device Admin - Returns a list of time and date conditions.
+      operationId: getDeviceAdminTimeConditions
+      tags:
+        - Device Administration - Time/Date Conditions
+      responses:
+        '200':
+          description: list of time/date conditions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionListResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Creates time/date condition.
+      description: Device Admin - Creates time/date condition.
+      operationId: postDeviceAdminTimeCondition
+      tags:
+        - Device Administration - Time/Date Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeAndDateCondition'
+            example:
+              name: Time condition 1
+              conditionType: TimeAndDateCondition
+              isNegate: false
+              description: Optional description
+              hours:
+                startTime: '8:10'
+                endTime: '15:10'
+              weekDays:
+                - Sunday
+                - Tuesday
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/time-condition/{conditionId}:
+    parameters:
+      - $ref: '#/components/parameters/ConditionParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns a network condition.
+      description: Device Admin - Returns a network condition.
+      operationId: getDeviceAdminTimeConditionByConditionId
+      tags:
+        - Device Administration - Time/Date Conditions
+      responses:
+        '200':
+          description: Network condition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update network condition.
+      description: Device Admin - Update network condition.
+      operationId: putDeviceAdminTimeConditionByConditionId
+      tags:
+        - Device Administration - Time/Date Conditions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimeAndDateCondition'
+            example:
+              name: Time condition 1 updated
+              conditionType: TimeAndDateCondition
+              isNegate: false
+              description: Optional description
+              hours:
+                startTime: '8:10'
+                endTime: '15:10'
+              weekDays:
+                - Sunday
+                - Tuesday
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeAndDateConditionResponseEntity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete Time/Date condition.
+      description: Device Admin - Delete Time/Date condition.
+      operationId: deleteDeviceAdminTimeConditionByConditionId
+      tags:
+        - Device Administration - Time/Date Conditions
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/mfa:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get MFA rules.
+      description: Device Admin - Get MFA rules.
+      operationId: getDeviceAdminPolicyByIdMfaRuleList
+      tags:
+        - Device Admin - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      summary: Device Admin - Create MFA rule.
+      description: |
+        Device Admin - Create MFA rule:
+        <ul>
+        <li> Rule must include name and condition. </li>
+        <li> Condition has hierarchical structure which define a set of conditions for which authentication policy rule could be match. </li>
+        <li> Condition can be either reference to a stored Library condition, using model <b>ConditionReference</b> </li>
+        or dynamically built conditions which are not stored in the conditions Library, using models <b>ConditionAttributes, ConditionAndBlock, ConditionOrBlock</b>. </li>
+        </ul>
+      operationId: createDeviceAdminPolicyByIdMfaRule
+      tags:
+        - Device Admin - MFA Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleMfa'
+            example:
+              rule:
+                name: MFA Rule 1
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Device Admin
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              mfaConnectionName: Connection Name
+              mfaResultAction: ACCEPT
+              mfaFailAction: REJECT
+      responses:
+        '201':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/mfa/{ruleId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/RuleParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Get rule attributes.
+      description: Device Admin - Get rule attributes.
+      operationId: getDeviceAdminPolicyByIdMfaRuleById
+      tags:
+        - Device Admin - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      summary: Device Admin - Update rule.
+      description: Device Admin - Update rule.
+      operationId: updateDeviceAdminPolicyByIdMfaRuleById
+      tags:
+        - Device Admin - MFA Rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuleMfa'
+            example:
+              rule:
+                name: MFA Rule 1 updated
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: TACACS
+                  attributeName: Service
+                  operator: ipEquals
+                  attributeValue: Login
+              mfaConnectionName: Connection Name
+              mfaResultAction: ACCEPT
+              mfaFailAction: REJECT
+      responses:
+        '200':
+          $ref: '#/components/responses/MfaRuleResponse'
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      summary: Device Admin - Delete rule.
+      description: Device Admin - Delete rule.
+      operationId: deleteDeviceAdminPolicyByIdMfaRuleById
+      tags:
+        - Device Admin - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/IdResponse'
+        '202':
+          description: Accepted
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/policy-set/{policyId}/mfa/reset-hitcount:
+    parameters:
+      - $ref: '#/components/parameters/PolicyParam'
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    post:
+      summary: Device Admin - Reset HitCount for MFA Rules
+      description: Device Admin - Reset HitCount for MFA Rules
+      operationId: resetHitCountsDeviceAdminPolicyByIdMfaRules
+      tags:
+        - Device Admin - MFA Rules
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessMessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/shell-profiles:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of shell profiles.
+      description: <p>Device Admin - Returns list of shell profiles.<br> (Other CRUD APIs available through ERS)<br></p>
+      operationId: getDeviceAdminProfiles
+      tags:
+        - Device Administration - Shell Profiles
+      responses:
+        '200':
+          description: list of shell profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/command-sets:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Return list of command sets.
+      description: <p>Device Admin - Return list of command sets.<br> (Other CRUD APIs available through ERS)<br></p>
+      operationId: getDeviceAdminCommandSets
+      tags:
+        - Device Administration - Command Sets
+      responses:
+        '200':
+          description: list of commands set
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommandSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/identity-stores:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Return list of identity stores for authentication.
+      description: <p>Device Admin - Return list of identity stores for authentication.<br> (Other CRUD APIs available through ERS)<br></p>
+      operationId: getDeviceAdminIdentityStores
+      tags:
+        - Device Administration - Identity Stores
+      responses:
+        '200':
+          description: list of identity stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityStore'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/service-names:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Device Admin - Returns list of allowed protocols and server sequences.
+      description: <p>Returns list of Allowed Protocols and Server Sequences for Device Admin Policy Set results. <br> 'isLocalAuthorization' property is available only for Network Access Policy Set results of type Server Sequence. <br> (Other CRUD APIs available through ERS)<br></p>
+      operationId: getDeviceAdminServiceNames
+      tags:
+        - Device Administration - Service Names
+      responses:
+        '200':
+          description: list of allowed protocols and server sequences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceName'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /device-admin/dictionaries/authentication:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for authentication.
+      description: Network Access - Returns list of dictionary attributes for authentication.
+      operationId: getDeviceAdminDictionariesAuthentication
+      tags:
+        - Device Administration - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/dictionaries/authorization:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for authorization.
+      description: Network Access - Returns list of dictionary attributes for authorization.
+      operationId: getDeviceAdminDictionariesAuthorization
+      tags:
+        - Device Administration - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /device-admin/dictionaries/policyset:
+    parameters:
+      - $ref: '#/components/parameters/XRequestIdHeader'
+    get:
+      summary: Network Access - Returns list of dictionary attributes for policyset.
+      description: Network Access - Returns list of dictionary attributes for policyset.
+      operationId: getDeviceAdminDictionariesPolicyset
+      tags:
+        - Device Administration - Dictionary Attributes List
+      responses:
+        '200':
+          $ref: '#/components/responses/DictionaryAttributeListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+  parameters:
+    XRequestIdHeader:
+      in: header
+      name: X-Request-ID
+      description: request Id, will return in the response headers, and appear in logs
+      schema:
+        type: string
+      required: false
+    PolicyParam:
+      in: path
+      name: policyId
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Policy id
+      example: 12345678-f0e7-456b-a2d1-876543320b14
+    RuleParam:
+      in: path
+      name: ruleId
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Rule id
+      example: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+    ConditionParam:
+      in: path
+      name: conditionId
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Condition id
+      example: abc952cb-b901-4b09-b363-5ebf39bdbaf9
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: '{code: 404, message: The specified resource was not found}'
+    Forbidden:
+      description: The specified resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: '{code: 403, message: operation forbidden}'
+    Conflict:
+      description: Conflict in the current state of the resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: '{code: 409, message: Conflict}'
+    Timeout:
+      description: Request Timeout
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: '{code: 408, message: Request Timeout}'
+    IdResponse:
+      description: Response with object ID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/IdResponseEntity'
+    SuccessMessageResponse:
+      description: Response with success message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponseEntity'
+    AuthenticationRuleResponse:
+      description: Authentication Rule response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationRuleResponseEntity'
+    AuthenticationRuleListResponse:
+      description: Authentication Rule list response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthenticationRuleListResponseEntity'
+    MfaRuleResponse:
+      description: MFA Rule list response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MfaRuleResponseEntity'
+    MfaRuleListResponse:
+      description: MFA Rule list response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MfaRuleListResponseEntity'
+    NetworkAccessAuthorizationRuleResponse:
+      description: Network Access Authorization Rule response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NetworkAccessAuthorizationRuleResponseEntity'
+    NetworkAccessAuthorizationRuleListResponse:
+      description: Network Access Authorization Rule list response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NetworkAccessAuthorizationRuleListResponseEntity'
+    DeviceAdminAuthorizationRuleResponse:
+      description: Device Admin Authorization Rule response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeviceAdminAuthorizationRuleResponseEntity'
+    DeviceAdminAuthorizationRuleListResponse:
+      description: Device Admin Authorization Rule response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeviceAdminAuthorizationRuleListResponseEntity'
+    PolicySetResponse:
+      description: PolicySet response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PolicySetResponseEntity'
+    PolicySetListResponse:
+      description: List of network access policy sets
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PolicySetListResponseEntity'
+    LibraryConditionResponse:
+      description: Library condition object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/LibraryConditionResponseEntity'
+          example:
+            version: 1.0.0
+            response:
+              conditionType: LibraryConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: Device IP Address
+              operator: ipEquals
+              attributeValue: 10.10.10.10
+              name: MyCondition
+              id: 0869885e-abf6-4ed8-8a39-cad5514e6832
+              description: Condition Description
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/condition/0869885e-abf6-4ed8-8a39-cad5514e6832
+                type: application/json
+    LibraryConditionListResponse:
+      description: List of library conditions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/LibraryConditionListResponseEntity'
+    DictionaryListResponse:
+      description: Response containing DictionaryListResponseEntity object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DictionaryListResponseEntity'
+    DictionaryResponse:
+      description: Response containing DictionaryResponseEntity object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DictionaryResponseEntity'
+    DictionaryAttributeResponse:
+      description: Response containaing DictionaryAttributeResponseEntity Object
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DictionaryAttributeResponseEntity'
+    DictionaryAttributeListResponse:
+      description: list of DictionaryAttributeResponseEntity objects
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DictionaryAttributeListResponseEntity'
+  headers:
+    Cache-Control:
+      schema:
+        enum:
+          - no-cache
+          - no-store
+          - must-revalidate
+        default: no-cache
+        example: no-cache
+    Pragma:
+      schema:
+        type: string
+        default: no-cache
+        example: no-cache
+    Content-Type:
+      schema:
+        type: string
+        example: application/json; charset=UTF-8
+    Strict-Transport-Security:
+      schema:
+        type: string
+        example: max-age=31536000; includeSubDomains
+    X-Content-Type-Options:
+      schema:
+        type: string
+        default: nosniff
+        example: nosniff
+    X-Frame-Options:
+      schema:
+        type: string
+        default: SAMEORIGIN
+        example: SAMEORIGIN
+    X-XSS-Protection:
+      schema:
+        type: string
+        default: 1; mode=block
+        example: 1; mode=block
+    Server:
+      schema:
+        type: string
+        default: null
+        example: null
+    Connection:
+      schema:
+        enum:
+          - keep-alive
+          - close
+        default: close
+        example: keep-alive
+    Content-Encoding:
+      schema:
+        type: string
+        default: gzip
+        example: gzip
+    Date:
+      schema:
+        type: string
+        example: Sun, 01 Sep 2020 07:53:54 GMT
+    Expires:
+      schema:
+        type: string
+        example: Thu, 01 Jan 1970 00:00:00 GMT
+    Transfer-Encoding:
+      schema:
+        type: string
+        example: chunked
+    Vary:
+      schema:
+        type: string
+        example: accept-encoding
+    Content-Security-Policy:
+      schema:
+        type: string
+        example: default-src 'self'
+    X-Request-ID:
+      description: request Id, must be in logs too
+      schema:
+        type: string
+        example: '1234'
+  schemas:
+    PolicySet:
+      type: object
+      description: Policy set structure
+      required:
+        - name
+        - serviceName
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Identifier for the policy set
+          example: 12345678-f0e7-456b-a2d1-876543320b14
+        name:
+          type: string
+          description: Given name for the policy set, [Valid characters are alphanumerics, underscore, hyphen, space, period, parentheses]
+          pattern: ^[\w\-\.\(\)\ ]+$
+          example: My_policy_set 1
+        description:
+          type: string
+          description: The description for the policy set
+          pattern: ^$|^[^\%\<\>]+$
+          example: My Description
+        hitCounts:
+          type: integer
+          readOnly: true
+          description: The amount of times the policy was matched
+          default: 0
+          example: 5
+        rank:
+          description: The rank(priority) in relation to other policy set. Lower rank is higher priority.
+          type: integer
+          default: 0
+          example: 0
+        state:
+          description: The state that the policy set is in. A disabled policy set cannot be matched.
+          type: string
+          enum:
+            - enabled
+            - disabled
+            - monitor
+          default: enabled
+          example: enabled
+        default:
+          description: Flag which indicates if this policy set is the default one
+          type: boolean
+          readOnly: true
+          default: false
+          example: true
+        condition:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Condition'
+        serviceName:
+          description: Policy set service identifier - Allowed Protocols,Server Sequence..
+          type: string
+          example: Default Network Access
+        isProxy:
+          description: Flag which indicates if the policy set service is of type 'Proxy Sequence' or 'Allowed Protocols'
+          type: boolean
+          default: false
+          example: false
+        link:
+          $ref: '#/components/schemas/Link'
+    Dictionary:
+      type: object
+      description: Dictionary POST format
+      required:
+        - name
+        - version
+        - dictionaryAttrType
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Identifier for the dictionary
+          example: 12345678-f0e7-456b-a2d1-876543320b17
+        name:
+          type: string
+          pattern: ^[\w\-\.\ ]+$
+          description: The dictionary name
+          example: my dictionary
+        description:
+          type: string
+          description: The description of the Dictionary
+          example: a dictionary description
+        version:
+          type: string
+          pattern: ^[0-9]+(.[0-9]+){0,2}$
+          description: The dictionary version
+          example: 1.2
+        dictionaryAttrType:
+          type: string
+          description: The dictionary attribute type
+          enum:
+            - ENTITY_ATTR
+            - MSG_ATTR
+            - PIP_ATTR
+          example: ENTITY_ATTR
+        link:
+          $ref: '#/components/schemas/Link'
+    DictionaryAttribute:
+      type: object
+      description: Dictionary Attribute format
+      required:
+        - name
+        - internalName
+        - dataType
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Identifier for the dictionary attribute
+          example: 12345678-f0e7-456b-a2d1-876543320b11
+        directionType:
+          type: string
+          enum:
+            - IN
+            - OUT
+            - NONE
+            - BOTH
+          readOnly: true
+          description: the direction for the useage of the dictionary attribute
+          example: BOTH
+        name:
+          type: string
+          pattern: ^[^|*,=\]\[:\"^><~'׳\\%}{$]+$
+          description: The dictionary attribute's name
+          example: my dictionary attribute
+        description:
+          type: string
+          description: The description of the Dictionary attribute
+          example: a dictionary attribute description
+        internalName:
+          type: string
+          description: the internal name of the dictionary attribute
+          example: my dictionary attribute internal name
+        dataType:
+          type: string
+          description: the data type for the dictionary attribute
+          enum:
+            - BOOLEAN
+            - DATE
+            - FLOAT
+            - INT
+            - IP
+            - IPV4
+            - IPV6
+            - IPV6INTERFACE
+            - IPV6PREFIX
+            - LONG
+            - OCTET_STRING
+            - STRING
+            - UNIT32
+            - UINT64
+          example: IPV6
+        dictionaryName:
+          type: string
+          description: the name of the dictionary which the dictionary attribute belongs to
+          example: my dictionary
+        allowedValues:
+          type: array
+          description: all of the allowed values for the dictionary attribute
+          items:
+            type: object
+            required:
+              - key
+              - value
+            properties:
+              key:
+                type: string
+              value:
+                type: string
+              isDefault:
+                type: boolean
+                description: true if this key value is the default between the allowed values of the dictionary attribute
+                default: false
+                example: true
+          example:
+            - key: key1
+            - value: value1
+            - isDefault: true
+    RuleAuthentication:
+      description: Rule for authentication in Network Access/Device Admin
+      type: object
+      properties:
+        rule:
+          $ref: '#/components/schemas/RuleCommon'
+        identitySourceName:
+          type: string
+          description: Identity source name from the identity stores
+          default: Internal Users
+          example: Internal Endpoints
+        ifAuthFail:
+          type: string
+          description: Action to perform when authentication fails such as Bad credentials, disabled user and so on
+          default: reject
+          example: reject
+        ifUserNotFound:
+          type: string
+          description: Action to perform when user is not found in any of identity stores
+          default: reject
+          example: reject
+        ifProcessFail:
+          type: string
+          description: Action to perform when ISE is uanble to access the identity database
+          default: drop
+          example: drop
+        link:
+          $ref: '#/components/schemas/Link'
+    RuleMfa:
+      description: Rule for MFA in Network Access/Device Admin
+      type: object
+      properties:
+        rule:
+          $ref: '#/components/schemas/RuleCommon'
+        mfaConnectionName:
+          type: string
+          description: MFA Connection name for MFA
+          default: api-XXXXXXXX.duosecurity.com
+          example: api-XXXXXXXX.duosecurity.com
+        mfaFailAction:
+          type: string
+          description: Action to perform when MFA fails
+          default: REJECT
+          example: REJECT
+        mfaResultAction:
+          type: string
+          description: Action to perform when MFA is successful
+          default: ACCEPT
+          example: ACCEPT
+        link:
+          $ref: '#/components/schemas/Link'
+    RuleAuthorizationNetworkAccess:
+      description: Authorization rule for network access
+      type: object
+      minProperties: 2
+      required:
+        - rule
+      properties:
+        rule:
+          $ref: '#/components/schemas/RuleCommon'
+        profile:
+          description: The authorization profile/s
+          type: array
+          items:
+            type: string
+          example:
+            - PermitAccess
+            - NSP_Onboard
+        securityGroup:
+          description: Security group used in authorization policies
+          type: string
+          example: BYOD
+        link:
+          $ref: '#/components/schemas/Link'
+    RuleAuthorizationDeviceAdmin:
+      description: Authorization rule for device admin
+      type: object
+      minProperties: 2
+      required:
+        - rule
+      properties:
+        rule:
+          $ref: '#/components/schemas/RuleCommon'
+        commands:
+          description: Command sets enforce the specified list of commands that can be executed by a device administrator
+          type: array
+          items:
+            type: string
+          example:
+            - DenyAllCommands
+        profile:
+          description: Device admin profiles control the initial login session of the device administrator
+          type: string
+          example: Default Shell Profile
+        link:
+          $ref: '#/components/schemas/Link'
+    RuleCommon:
+      description: Common attributes in rule authentication/authorization
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          description: The identifier of the rule
+          type: string
+          readOnly: true
+          format: uuid
+          example: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+        name:
+          description: Rule name, [Valid characters are alphanumerics, underscore, hyphen, space, period, parentheses]
+          type: string
+          pattern: ^[\w\-\.\(\)\ ]+$
+          example: MyRuleName_1
+        hitCounts:
+          description: The amount of times the rule was matched
+          type: integer
+          readOnly: true
+          default: 0
+          example: 2
+        rank:
+          description: The rank(priority) in relation to other rules. Lower rank is higher priority.
+          type: integer
+          default: 0
+          example: 1
+        state:
+          description: The state that the rule is in. A disabled rule cannot be matched.
+          type: string
+          enum:
+            - enabled
+            - disabled
+            - monitor
+          default: enabled
+          example: enabled
+        default:
+          description: Indicates if this rule is the default one
+          type: boolean
+          default: false
+          example: false
+        condition:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Condition'
+    Condition:
+      type: object
+      description: <ul><li>Hierarchical structure which defines a set of conditions for which authentication or authorization policy rules could be matched.</li> <li>Logical operations(AND, OR) relationship between conditions are supported</li> <li>Each condition can have subconditions with relation to logical operations</li></ul>
+      required:
+        - conditionType
+      properties:
+        link:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Link'
+        conditionType:
+          description: <ul><li>Inidicates whether the record is the condition itself(data) or a logical(or,and) aggregation</li> <li>Data type enum(reference,single) indicates than "conditonId" OR "ConditionAttrs" fields should contain condition data but not both</li> <li>Logical aggreation(and,or) enum indicates that additional conditions are present under the children field</li></ul>
+          type: string
+          enum:
+            - ConditionReference
+            - ConditionAttributes
+            - LibraryConditionAttributes
+            - ConditionAndBlock
+            - LibraryConditionAndBlock
+            - ConditionOrBlock
+            - LibraryConditionOrBlock
+            - TimeAndDateCondition
+          example: ConditionAttributes
+        isNegate:
+          type: boolean
+          description: Indicates whereas this condition is in negate mode
+          default: false
+          example: false
+      discriminator:
+        propertyName: conditionType
+        mapping:
+          ConditionReference: '#/components/schemas/ConditionReference'
+          ConditionAttributes: '#/components/schemas/ConditionAttributes'
+          LibraryConditionAttributes: '#/components/schemas/LibraryConditionAttributes'
+          ConditionAndBlock: '#/components/schemas/ConditionAndBlock'
+          LibraryConditionAndBlock: '#/components/schemas/LibraryConditionAndBlock'
+          ConditionOrBlock: '#/components/schemas/ConditionOrBlock'
+          LibraryConditionOrBlock: '#/components/schemas/LibraryConditionOrBlock'
+          TimeAndDateCondition: '#/components/schemas/TimeAndDateCondition'
+    ConditionReference:
+      allOf:
+        - $ref: '#/components/schemas/Condition'
+        - type: object
+          description: An object that contains a reference ID to a stored Library Condition
+          required:
+            - id
+          properties:
+            name:
+              type: string
+              description: Library condition name
+              example: Radius Condition
+              readOnly: true
+            id:
+              type: string
+              format: uuid
+              description: UUID for condition
+              example: 12345678-f0e7-456b-a2d1-876543320123
+            description:
+              type: string
+              description: Condition description
+              readOnly: true
+              pattern: ^$|^[^\%\<\>]+$
+              example: Match only radius requests
+    ConditionAttributes:
+      allOf:
+        - $ref: '#/components/schemas/Condition'
+        - type: object
+          description: Condition attributes data
+          required:
+            - dictionaryName
+            - attributeName
+            - operator
+            - attributeValue
+          properties:
+            dictionaryName:
+              type: string
+              description: Dictionary name
+              example: Network Access
+            attributeName:
+              type: string
+              description: Dictionary attribute name
+              example: UserName
+            operator:
+              type: string
+              enum:
+                - equals
+                - notEquals
+                - contains
+                - notContains
+                - matches
+                - in
+                - notIn
+                - startsWith
+                - notStartsWith
+                - endsWith
+                - notEndsWith
+                - greaterThan
+                - lessThan
+                - greaterOrEquals
+                - lessOrEquals
+                - ipGreaterThan
+                - ipLessThan
+                - ipEquals
+                - ipNotEquals
+                - macEquals
+                - macNotEquals
+                - macNotIn
+                - macIn
+                - macStartsWith
+                - macNotStartsWith
+                - macEndsWith
+                - macNotEndsWith
+                - macContains
+                - macNotContains
+                - dateGreaterThan
+                - dateLessThan
+              description: Equality operator
+              example: equals
+            dictionaryValue:
+              type: string
+              description: Dictionary value
+              example: Radius
+            attributeValue:
+              type: string
+              pattern: ^$|^[^\%\<\>]+$
+              description: <ul><li>Attribute value for condition</li> <li>Value type is specified in dictionary object</li> <li>if multiple values allowed is specified in dictionary object</li></ul>
+              example: cisco
+    LibraryConditionAttributes:
+      allOf:
+        - $ref: '#/components/schemas/ConditionAttributes'
+        - required:
+            - name
+          properties:
+            name:
+              type: string
+              description: Condition name, [Valid characters are alphanumerics, underscore, hyphen, space]
+              pattern: ^[\w\-\ ]+$
+              example: Wired_MAB
+            id:
+              type: string
+              format: uuid
+              description: condition ID
+              example: 12345678-f0e7-456b-a2d1-876543320123
+            description:
+              type: string
+              pattern: ^$|^[^\%\<\>]+$
+              description: Conditiopn description
+              example: Match only radius requests
+              default: ''
+    ConditionAndBlock:
+      allOf:
+        - $ref: '#/components/schemas/Condition'
+        - type: object
+          description: Block of children conditions with 'AND' relationship
+          required:
+            - children
+          properties:
+            children:
+              description: In case type is andBlock or orBlock addtional conditions will be aggregated under this logical (OR/AND) condition
+              type: array
+              items:
+                $ref: '#/components/schemas/Condition'
+              minItems: 1
+              example:
+                - name: Radius condition
+                  description: Match only radius requests
+                  id: ad947f38-7063-4da2-8723-652e0ca2ea41
+                  conditionType: ConditionReference
+                  isNegate: false
+                - name: Tacacs condition
+                  description: Match only tacacs condition
+                  id: ad947f38-7063-4da2-8723-652e0ca2eb52
+                  conditionType: ConditionReference
+                  isNegate: false
+    LibraryConditionAndBlock:
+      allOf:
+        - $ref: '#/components/schemas/ConditionAndBlock'
+        - required:
+            - name
+          description: Library condition AND block with full details
+          properties:
+            name:
+              type: string
+              description: Condition name, [Valid characters are alphanumerics, underscore, hyphen, space]
+              pattern: ^[\w\-\ ]+$
+              example: Children conditions OR Block
+            id:
+              type: string
+              format: uuid
+              description: condition ID
+              example: 12345678-f0e7-456b-a2d1-876543320123
+            description:
+              type: string
+              description: Condition description
+              pattern: ^$|^[^\%\<\>]+$
+              example: Match only radius requests
+              default: ''
+    ConditionOrBlock:
+      allOf:
+        - $ref: '#/components/schemas/Condition'
+        - type: object
+          description: Block of children conditions with 'OR' relationship
+          required:
+            - children
+          properties:
+            children:
+              description: In case type is andBlock or orBlock addtional conditions will be aggregated under this logical (OR/AND) condition
+              type: array
+              items:
+                $ref: '#/components/schemas/Condition'
+              minItems: 1
+              example:
+                - name: Radius condition
+                  description: Match only radius requests
+                  id: ad947f38-7063-4da2-8723-652e0ca2ea41
+                  conditionType: ConditionReference
+                  isNegate: false
+                - name: Tacacs condition
+                  description: Match only tacacs condition
+                  id: ad947f38-7063-4da2-8723-652e0ca2eb52
+                  conditionType: ConditionReference
+                  isNegate: false
+    LibraryConditionOrBlock:
+      allOf:
+        - $ref: '#/components/schemas/ConditionOrBlock'
+        - description: Library condition OR block with full details
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              description: Condition name, [Valid characters are alphanumerics, underscore, hyphen, space]
+              pattern: ^[\w\-\ ]+$
+              example: Children_Block
+            id:
+              type: string
+              format: uuid
+              description: condition ID
+              example: 12345678-f0e7-456b-a2d1-876543320123
+            description:
+              type: string
+              description: Condition description
+              pattern: ^$|^[^\%\<\>]+$
+              example: Match only radius requests
+              default: ''
+    NetworkCondition:
+      description: Unique network conditions to restrict access to the network
+      type: object
+      required:
+        - name
+        - conditionType
+      properties:
+        link:
+          $ref: '#/components/schemas/Link'
+        name:
+          description: Network Condition name
+          type: string
+          pattern: ^[\w\ ]+$
+          example: My network condition
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+        description:
+          type: string
+          pattern: ^$|^[^\%\<\>]+$
+          example: Network Condition Description
+        conditionType:
+          description: This field determines the content of the conditions field
+          type: string
+          enum:
+            - EndstationCondition
+            - DeviceCondition
+            - DevicePortCondition
+          example: EndstationCondition
+      discriminator:
+        propertyName: conditionType
+        mapping:
+          EndstationCondition: '#/components/schemas/EndstationCondition'
+          DeviceCondition: '#/components/schemas/DeviceCondition'
+          DevicePortCondition: '#/components/schemas/DevicePortCondition'
+    EndstationCondition:
+      allOf:
+        - $ref: '#/components/schemas/NetworkCondition'
+        - description: Cisco ISE evaluates the remote address TO field (which is obtained based on whether it is a TACACS+ or RADIUS request) to identify whether it is the IP address, MAC address, calling line identification (CLI), or dialed number identification service (DNIS) of the endpoint.
+          properties:
+            ipAddrList:
+              description: <p>This field should contain IP address or subnet.<br> IP address can be IPV4 format (n.n.n.n) or IPV6 format (n:n:n:n:n:n:n:n).<br> IP subnet can be IPV4 format (n.n.n.n/m) or IPV6 format (n:n:n:n:n:n:n:n/m).<br> Line format - IP Address or subnet</p>
+              type: array
+              items:
+                type: string
+              example:
+                - 1.1.1.1
+                - 2.2.2.2
+            macAddrList:
+              description: <p>This field should contain Endstation MAC address, comma, and Destination MAC addresses.<br> Each Max address must include twelve hexadecimal digits using formats nn:nn:nn:nn:nn:nn or nn-nn-nn-nn-nn-nn or nnnn.nnnn.nnnn or nnnnnnnnnnnn.<br> Line format - Endstation MAC,Destination MAC </p>
+              type: array
+              items:
+                type: string
+              example:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+                - '-ANY-,00-0E-A6-A7-63-F8'
+            cliDnisList:
+              description: <p>This field should contain a Caller ID (CLI), comma, and Called ID (DNIS).<br> Line format -  Caller ID (CLI), Called ID (DNIS)</p>
+              type: array
+              items:
+                type: string
+              example:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+    DeviceCondition:
+      allOf:
+        - $ref: '#/components/schemas/NetworkCondition'
+        - description: A network device can be identified by its IP address, device name that is defined in the network device repository, or Network Device Group.
+          properties:
+            ipAddrList:
+              description: <p>This field should contain IP address or subnet.<br> IP address can be IPV4 format (n.n.n.n) or IPV6 format (n:n:n:n:n:n:n:n).<br> IP subnet can be IPV4 format (n.n.n.n/m) or IPV6 format (n:n:n:n:n:n:n:n/m).<br> Line format - IP Address or subnet</p>
+              type: array
+              items:
+                type: string
+              example:
+                - 1.1.1.1
+                - 2.2.2.2
+            deviceList:
+              description: <p>This field should contain Device Name. The device name must be the same as the name field in a Network Device object. Line format - Device Name</p>
+              type: array
+              items:
+                type: string
+              example:
+                - MyDevice1
+                - MyDevice2
+            deviceGroupList:
+              description: <p>This field should contain a tuple with NDG Root, comma, and an NDG (that it under the root).<br> Line format - NDG Root Name, NDG, Port</p>
+              type: array
+              items:
+                type: string
+              example:
+                - IPSEC#Is IPSEC Device
+                - Location#All Locations
+    DevicePortCondition:
+      allOf:
+        - $ref: '#/components/schemas/NetworkCondition'
+        - description: Based on the device's IP address, name, NDG, and port
+          properties:
+            ipAddrList:
+              description: <p>This field should contain IP-address-or-subnet,port number<br> IP address can be IPV4 format (n.n.n.n) or IPV6 format (n:n:n:n:n:n:n:n).<br> IP subnet can be IPV4 format (n.n.n.n/m) or IPV6 format (n:n:n:n:n:n:n:n/m).<br> Line format - IP Address or subnet,Port</p>
+              type: array
+              items:
+                type: string
+              example:
+                - 1.1.1.1,80
+                - 2.2.2.2,443
+            deviceList:
+              description: <p>This field should contain Device-Name,port-number. The device name must be the same as the name field in a Network Device object.<br> Line format - Device Name,Port</p>
+              type: array
+              items:
+                type: string
+              example:
+                - MyDevice1,80
+                - MyDevice2,443
+            deviceGroupList:
+              description: <p>This field should contain a tuple with NDG Root, comma, and an NDG (that it under the root).<br> Line format - NDG Root Name, NDG, Port</p>
+              type: array
+              items:
+                type: string
+              example:
+                - IPSEC#Is IPSEC Device,-ANY-
+                - Location#All Locations,80
+    TimeAndDateCondition:
+      description: Condition based on time and date.
+      allOf:
+        - $ref: '#/components/schemas/Condition'
+        - required:
+            - name
+          properties:
+            name:
+              description: Condition name
+              type: string
+              pattern: ^[\w\-\ ]+$
+              example: TimeAndDate Condition
+            id:
+              type: string
+              format: uuid
+            description:
+              type: string
+              description: Condition description
+              pattern: ^$|^[^\%\<\>]+$
+              default: ''
+              example: Optional description
+            hoursRange:
+              $ref: '#/components/schemas/HoursRange'
+            hoursRangeException:
+              $ref: '#/components/schemas/HoursRange'
+            weekDays:
+              description: <p>Defines for which days this condition will be matched<br> Days format - Arrays of WeekDay enums <br> Default - List of All week days</p>
+              type: array
+              items:
+                $ref: '#/components/schemas/WeekDayEnum'
+              minItems: 1
+              default:
+                - Sunday
+                - Monday
+                - Tuesday
+                - Wednesday
+                - Thursday
+                - Friday
+                - Saturday
+              example:
+                - Sunday
+                - Monday
+                - Tuesday
+            weekDaysException:
+              description: <p>Defines for which days this condition will NOT be matched<br> Days format - Arrays of WeekDay enums <br> Default - Not enabled</p>
+              type: array
+              items:
+                $ref: '#/components/schemas/WeekDayEnum'
+              example:
+                - Tuesday
+            datesRange:
+              $ref: '#/components/schemas/DatesRange'
+            datesRangeException:
+              $ref: '#/components/schemas/DatesRange'
+    DatesRange:
+      type: object
+      description: <p>Defines for which date/s TimeAndDate condition will be matched<br> Options are - Date range, for specific date, the same date should be used for start/end date <br> Default - no specific dates<br> In order to reset the dates to have no specific dates Date format - yyyy-mm-dd (MM = month, dd = day, yyyy = year)</p>
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          type: string
+          minLength: 10
+          maxLength: 10
+          pattern: ^\d{4}\-(0[1-9]|1[012])\-(0[1-9]|[12][0-9]|3[01])$
+          example: '2022-05-06'
+        endDate:
+          type: string
+          minLength: 10
+          maxLength: 10
+          pattern: ^\d{4}\-(0[1-9]|1[012])\-(0[1-9]|[12][0-9]|3[01])$
+          example: '2022-05-10'
+    HoursRange:
+      required:
+        - startTime
+        - endTime
+      description: <p>Defines for which hours a TimeAndDate condition will be matched<br> Time foramt - hh:mm  ( h = hour , mm = minutes ) <br> Default - All Day </p>
+      type: object
+      properties:
+        startTime:
+          type: string
+          pattern: ^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$
+          example: '08:00'
+        endTime:
+          type: string
+          pattern: ^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$
+          example: '15:00'
+    WeekDayEnum:
+      type: string
+      enum:
+        - Sunday
+        - Monday
+        - Tuesday
+        - Wednesday
+        - Thursday
+        - Friday
+        - Saturday
+    ServiceName:
+      type: object
+      required:
+        - name
+        - id
+        - serviceType
+      properties:
+        name:
+          type: string
+          example: MyServerSequence
+        id:
+          type: string
+          example: b52df124-cc8c-45e0-b613-79c230227ddb
+        serviceType:
+          type: string
+          enum:
+            - allowedProtocols
+            - serverSequence
+          example: serverSequence
+          description: Allowed Protocols OR Server Sequence
+        isLocalAuthorization:
+          type: boolean
+          example: false
+    SecurityGroup:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Auditors
+        id:
+          type: string
+          format: uuid
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+    IdentityStore:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Internal Users
+        id:
+          type: string
+          format: uuid
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+    Profile:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Permit Access
+        id:
+          type: string
+          format: uuid
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+    CommandSet:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: DenyAllCommands
+          description: Command used in Device Admin authorization policies
+        id:
+          type: string
+          format: uuid
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          example: 400
+        message:
+          type: string
+          example: Bad Request
+    IdResponseEntity:
+      description: response object containing object ID
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 07da6fd8-5abc-4dc4-bcec-df309dbf4d17
+      required:
+        - id
+    MessageResponseEntity:
+      description: Response object containing success message
+      type: object
+      properties:
+        message:
+          type: string
+          example: Success
+      required:
+        - message
+    PolicySetResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/PolicySet'
+    PolicySetListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolicySet'
+          example:
+            - default: false
+              id: 793f55af-ad78-4021-bbdc-6286724394f8
+              name: New Policy Set 1
+              description: null
+              hitCounts: 0
+              rank: 0
+              state: enabled
+              condition:
+                link: null
+                conditionType: ConditionReference
+                isNegate: false
+                name: Switch_Local_Web_Authentication
+                id: 19d968b0-ebcb-4cdd-98e3-fe02e5521266
+                description: A condition to match authentication requests for Local Web Authentication from Cisco Catalyst Switches
+              serviceName: Default Network Access
+              isProxy: false
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/793f55af-ad78-4021-bbdc-6286724394f8
+                type: application/json
+    AuthenticationRuleResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/RuleAuthentication'
+      example:
+        version: 1.0.0
+        response:
+          rule:
+            condition:
+              conditionType: ConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: Device IP Address
+              operator: ipEquals
+              attributeValue: 10.0.10.0
+            default: false
+            hitCounts: 2
+            id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            name: MyRuleName_1
+            rank: 1
+            state: enabled
+          identitySourceName: Internal Endpoints
+          ifAuthFail: reject
+          ifProcessFail: drop
+          ifUserNotFound: reject
+          link:
+            href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/{{policy-id}}/authentication/d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            rel: self
+            type: application/json
+    AuthenticationRuleListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleAuthentication'
+          example:
+            - identitySourceName: Internal Endpoints
+              ifAuthFail: reject
+              ifProcessFail: drop
+              ifUserNotFound: reject
+              rule:
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+                default: false
+                hitCounts: 2
+                id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+                name: MyRuleName_1
+                rank: 1
+                state: enabled
+              link:
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/{{policy-id}}/authentication/d82952cb-b901-4b09-b363-5ebf39bdbaaa
+                rel: self
+                type: application/json
+    MfaRuleResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/RuleMfa'
+      example:
+        version: 1.0.0
+        response:
+          rule:
+            condition:
+              conditionType: ConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: Device IP Address
+              operator: ipEquals
+              attributeValue: 10.0.10.0
+            default: false
+            hitCounts: 2
+            id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            name: MyRuleName_1
+            rank: 1
+            state: enabled
+          mfaConnectionName: Connection Name
+          mfaResultAction: ACCEPT
+          mfaFailAction: REJECT
+          link:
+            href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/{{policy-id}}/mfa/d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            rel: self
+            type: application/json
+    MfaRuleListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleMfa'
+          example:
+            - mfaConnectionName: Connection Name
+              mfaResultAction: ACCEPT
+              mfaFailAction: REJECT
+              rule:
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+                default: false
+                hitCounts: 2
+                id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+                name: MyRuleName_1
+                rank: 1
+                state: enabled
+              link:
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/{{policy-id}}/mfa/d82952cb-b901-4b09-b363-5ebf39bdbaaa
+                rel: self
+                type: application/json
+    NetworkAccessAuthorizationRuleResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+      example:
+        version: 1.0.0
+        response:
+          rule:
+            default: false
+            id: c841b537-45fb-4c3a-a1ae-baeb3e4c427a
+            name: Authorization Rule 1
+            hitCounts: 0
+            rank: 0
+            state: enabled
+            condition:
+              conditionType: ConditionAttributes
+              isNegate: false
+              dictionaryName: Network Access
+              attributeName: Device IP Address
+              operator: ipEquals
+              attributeValue: 10.0.10.0
+          profile:
+            - PermitAccess
+          securityGroup: BYOD
+          link:
+            rel: self
+            href: https://{{ISE_IP}}/api/v1/policy/network-access/policy-set/{{policy-id}}/authorization/c841b537-45fb-4c3a-a1ae-baeb3e4c427a
+            type: application/json
+    NetworkAccessAuthorizationRuleListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleAuthorizationNetworkAccess'
+          example:
+            - rule:
+                default: true
+                id: c841b537-45fb-4c3a-a1ae-baeb3e4c4271
+                hitCounts: 0
+                rank: 1
+                state: enabled
+                condition: null
+                profile:
+                  - DenyAccess
+                securityGroup: null
+                link:
+                  rel: self
+                  href: https://{{ISE_IP}}/api/v1/policy/network-access/policy-set/{{policy-id}}/authorization/c841b537-45fb-4c3a-a1ae-baeb3e4c4271
+                  type: application/json
+            - rule:
+                default: false
+                id: c841b537-45fb-4c3a-a1ae-baeb3e4c427a
+                name: Authorization Rule 1
+                hitCounts: 0
+                rank: 0
+                state: enabled
+                condition:
+                  conditionType: ConditionAttributes
+                  isNegate: false
+                  dictionaryName: Network Access
+                  attributeName: Device IP Address
+                  operator: ipEquals
+                  attributeValue: 10.0.10.0
+              profile:
+                - PermitAccess
+              securityGroup: BYOD
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/network-access/policy-set/{{policy-id}}/authorization/c841b537-45fb-4c3a-a1ae-baeb3e4c427a
+                type: application/json
+    DeviceAdminAuthorizationRuleResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+      example:
+        version: 1.0.0
+        response:
+          rule:
+            condition:
+              conditionType: ConditionAttributes
+              dictionaryName: Network Access
+              attributeName: EapAuthentication
+              operator: equals
+              attributeValue: EAP-TLS
+              isNegate: false
+            default: false
+            hitCounts: 2
+            id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            name: MyRuleName_1
+            rank: 1
+            state: enabled
+          commands:
+            - DenyAllCommands
+          profile: Default Shell Profile
+          link:
+            href: https://{{ISE_IP}}/api/v1/policy/device-admin/policy-set/{{policy-id}}/authorization/d82952cb-b901-4b09-b363-5ebf39bdbaf9
+            rel: self
+            type: application/json
+    DeviceAdminAuthorizationRuleListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleAuthorizationDeviceAdmin'
+          example:
+            - profile: Default Shell Profile
+              rule:
+                condition:
+                  conditionType: ConditionAttributes
+                  dictionaryName: Network Access
+                  attributeName: EapAuthentication
+                  operator: equals
+                  attributeValue: EAP-TLS
+                  isNegate: false
+                default: false
+                hitCounts: 2
+                id: d82952cb-b901-4b09-b363-5ebf39bdbaf9
+                name: MyRuleName_1
+                rank: 1
+                state: enabled
+              commands:
+                - DenyAllCommands
+              link:
+                href: https://{{ISE_IP}}/api/v1/policy/device-admin/policy-set/{{policy-id]}}/authorization/d82952cb-b901-4b09-b363-5ebf39bdbaf9
+                rel: self
+                type: application/json
+    DictionaryListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/Dictionary'
+          example:
+            - dictionaryAttrType: ENTITY_ATTR
+              id: 12345678-f0e7-456b-a2d1-876543320b11
+              name: my dictionary
+              description: a dictionary description
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/dictionaries/ad947f38-7063-4da2-8723-652e0ca2ea41
+                type: application/json
+    DictionaryResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/Dictionary'
+    DictionaryAttributeResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/DictionaryAttribute'
+    DictionaryAttributeListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryAttribute'
+          example:
+            - allowedValues:
+                - key: key1
+                  value: value1
+                  isDefault: true
+              dataType: IPV6
+              description: a dictionary attribute description
+              dictionaryName: my dictionary
+              directionType: BOTH
+              id: 12345678-f0e7-456b-a2d1-876543320b11
+              internalName: my dictionary attribute internal name
+              name: my dictionary attribute
+    LibraryConditionResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/Condition'
+    LibraryConditionListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+          example:
+            - name: WirelessMAB
+              conditionType: LibraryConditionAttributes
+              description: Match only wireless MAB
+              dictionaryName: Normalised Radius
+              attributeName: RadiusFlowType
+              operator: equals
+              attributeValue: WirelessMAB
+              id: ad947f38-7063-4da2-8723-652e0ca2ea41
+              isNegate: false
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/condition/ad947f38-7063-4da2-8723-652e0ca2ea41
+                type: application/json
+            - name: Wired_MAB
+              conditionType: LibraryConditionAttributes
+              description: Match only Wired MAB
+              dictionaryName: Normalised Radius
+              attributeName: RadiusFlowType
+              operator: equals
+              attributeValue: WiredMAB
+              id: ad947f38-7063-4da2-8723-652e0ca2ea42
+              isNegate: false
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/condition/ad947f38-7063-4da2-8723-652e0ca2ea42
+                type: application/json
+    NetworkConditionResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/NetworkCondition'
+      example:
+        version: 1.0.0
+        respose:
+          name: Endstation condition 1
+          id: ad947f38-7063-4da2-8723-652e0ca2ea41
+          description: Optional description
+          conditionType: EndstationCondition
+          ipAddrList:
+            - 3.3.3.3
+            - 4.4.4.4
+          macAddrList: null
+          cliDnisList: null
+          link:
+            rel: self
+            href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/network-condition/ad947f38-7063-4da2-8723-652e0ca2ea41
+            type: application/json
+    NetworkConditionListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/NetworkCondition'
+          example:
+            - name: Endstation condition 1
+              id: ad947f38-7063-4da2-8723-652e0ca2ea41
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 3.3.3.3
+                - 4.4.4.4
+              macAddrList: null
+              cliDnisList: null
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/network-condition/ad947f38-7063-4da2-8723-652e0ca2ea41
+                type: application/json
+            - name: Endstation condition 2
+              id: b79114b5-4a89-41ba-a8fe-d1a5f6d56a43
+              description: Optional description
+              conditionType: EndstationCondition
+              ipAddrList:
+                - 1.1.1.1
+                - 2.2.2.2
+              macAddrList:
+                - 00-0E-A6-A7-63-F7,00-0E-A6-A7-63-F8
+                - 00-0E-A6-A7-63-F7,-ANY-
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/network-condition/ad947f38-7063-4da2-8723-652e0ca2ea42
+                type: application/json
+    TimeAndDateConditionResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          $ref: '#/components/schemas/TimeAndDateCondition'
+      example:
+        version: 1.0.0
+        response:
+          conditionType: TimeAndDateCondition
+          id: 1059b637-f0f4-4bdd-a25f-203da9f96e2a
+          isNegate: false
+          name: Time Condition 1
+          description: TimeDate description
+          hoursRange:
+            startTime: '08:00'
+            endTime: '10:00'
+          weekDays:
+            - Sunday
+            - Wednesday
+          link:
+            rel: self
+            href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/time-condition/1059b637-f0f4-4bdd-a25f-203da9f96e2a
+            type: application/json
+    TimeAndDateConditionListResponseEntity:
+      type: object
+      required:
+        - response
+        - version
+      properties:
+        version:
+          type: string
+          example: 1.0.0
+        response:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeAndDateCondition'
+          example:
+            - name: Time condition 1
+              conditionType: TimeAndDateCondition
+              id: ad947f38-7063-4da2-8723-652e0ca2ea41
+              isNegate: false
+              description: Optional description
+              hoursRange:
+                startTime: '8:10'
+                endTime: '15:10'
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/time-condition/ad947f38-7063-4da2-8723-652e0ca2ea41
+                type: application/json
+            - name: Time condition 2
+              id: ad947f38-7063-4da2-8723-652e0ca2ea42
+              conditionType: TimeAndDateCondition
+              isNegate: false
+              description: Optional description
+              DatesRange:
+                startDate: '2025-05-06'
+                endDate: '2025-05-10'
+              link:
+                rel: self
+                href: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/time-condition/ad947f38-7063-4da2-8723-652e0ca2ea42
+                type: application/json
+    Link:
+      type: object
+      readOnly: true
+      required:
+        - href
+      properties:
+        rel:
+          enum:
+            - next
+            - previous
+            - self
+            - status
+          type: string
+          example: self
+        href:
+          type: string
+          example: https://{{ISE_IP}}/api/v1/policy/{{protocol}}/policy-set/{{resource-id}}
+        type:
+          type: string
+          example: application/json

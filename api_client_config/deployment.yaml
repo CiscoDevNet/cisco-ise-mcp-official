@@ -1,0 +1,8 @@
+# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+
+project_name_override: "cisco-ise-deployment-api-client"
+package_name_override: "deployment"
+package_version_override: "1.0.0"
+package_description_override: "Python client for Cisco ISE Deployment API"
+
+docstrings_on_attributes: true

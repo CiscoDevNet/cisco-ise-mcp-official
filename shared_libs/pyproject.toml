@@ -1,0 +1,14 @@
+# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+
+[project]
+name = "shared-libs"
+version = "0.1.0"
+description = "Shared libraries for ISE MCP Server"
+requires-python = "==3.12.*"
+dependencies = []
+
+[tool.setuptools]
+packages = ["shared_libs"]
+
+[tool.setuptools.package-dir]
+shared_libs = "."

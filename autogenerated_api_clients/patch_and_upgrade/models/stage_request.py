@@ -1,0 +1,104 @@
+from collections.abc import Mapping
+from typing import Any, TypeVar, Optional, BinaryIO, TextIO, TYPE_CHECKING, Generator
+
+from attrs import define as _attrs_define
+from attrs import field as _attrs_field
+
+from ..types import UNSET, Unset
+
+from ..types import UNSET, Unset
+from typing import cast
+from typing import Union
+
+
+
+
+
+
+T = TypeVar("T", bound="StageRequest")
+
+
+
+@_attrs_define
+class StageRequest:
+    
+
+    hostnames: Union[Unset, list[str]] = UNSET
+    pre_check_report_id: Union[Unset, str] = UNSET
+    re_trigger: Union[Unset, bool] = UNSET
+    upgrade_type: Union[Unset, str] = UNSET
+    additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
+
+
+
+
+
+    def to_dict(self) -> dict[str, Any]:
+        hostnames: Union[Unset, list[str]] = UNSET
+        if not isinstance(self.hostnames, Unset):
+            hostnames = self.hostnames
+
+
+
+        pre_check_report_id = self.pre_check_report_id
+
+        re_trigger = self.re_trigger
+
+        upgrade_type = self.upgrade_type
+
+
+        field_dict: dict[str, Any] = {}
+        field_dict.update(self.additional_properties)
+        field_dict.update({
+        })
+        if hostnames is not UNSET:
+            field_dict["hostnames"] = hostnames
+        if pre_check_report_id is not UNSET:
+            field_dict["preCheckReportID"] = pre_check_report_id
+        if re_trigger is not UNSET:
+            field_dict["reTrigger"] = re_trigger
+        if upgrade_type is not UNSET:
+            field_dict["upgradeType"] = upgrade_type
+
+        return field_dict
+
+
+
+    @classmethod
+    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+        d = dict(src_dict)
+        hostnames = cast(list[str], d.pop("hostnames", UNSET))
+
+
+        pre_check_report_id = d.pop("preCheckReportID", UNSET)
+
+        re_trigger = d.pop("reTrigger", UNSET)
+
+        upgrade_type = d.pop("upgradeType", UNSET)
+
+        stage_request = cls(
+            hostnames=hostnames,
+            pre_check_report_id=pre_check_report_id,
+            re_trigger=re_trigger,
+            upgrade_type=upgrade_type,
+        )
+
+
+        stage_request.additional_properties = d
+        return stage_request
+
+    @property
+    def additional_keys(self) -> list[str]:
+        return list(self.additional_properties.keys())
+
+    def __getitem__(self, key: str) -> Any:
+        return self.additional_properties[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.additional_properties[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        del self.additional_properties[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.additional_properties

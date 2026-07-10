@@ -1,0 +1,2571 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+      "title": "Cisco ISE API - Patch and Upgrade",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "https://10.56.55.15:443",
+        "description": "Inferred Url"
+      }
+    ],
+    "tags": [
+      {
+        "name": "rollback-api-controller",
+        "description": "the rollback API"
+      },
+      {
+        "name": "upgrade-api-controller",
+        "description": "the upgrade API"
+      },
+      {
+        "name": "upgrade-patch-api-controller",
+        "description": "the upgrade-patch API"
+      }
+    ],
+    "paths": {
+      "/api/v1/rollback/patch-rollback": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "patchRollbackInfo",
+          "description": "Get current and previous patch installed information",
+          "operationId": "patchRollbackInfo",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchRollbackVersionResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        },
+        "post": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Trigger patch rollback on the Cisco ISE nodes.",
+          "description": "Trigger patch rollback on the Cisco ISE nodes. Patch will be rolled back in other nodes first followed by P-PAN. Precheck report Id is mandatory which has been obtained by running patch rollback pre-checks API. Patch rollback progress can be monitored using patch rollback get status API.  When rollback is going on PPAN, then monitor the progress on SPAN GUI. ",
+          "operationId": "rollbackPatch_1",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Patch rollback triggered successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. A valid precheck report's id and and hostnames should be provided as query parameters",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/rollback/patch-rollback/get-status": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Gets the status of patch rollback.",
+          "description": "Get the status of patch rollback for the requested nodes.  Precheck report Id obtained by running the precheck API is mandatory to get the status. ",
+          "operationId": "patchRollbackProceedStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeProceed",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. A valid precheck report's id should be provided as query parameter.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/rollback/patch-rollback/pre-checks": {
+        "post": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Initiate prechecks execution on PPAN for complete deployment.",
+          "description": "Initiates prechecks execution on PPAN for complete deployment. It returns a precheck report id, which can be used to trigger patch rollback later. Patch rollback can happen in two modes : \u003Col\u003E \u003Cli\u003EFull Patch Rollback -\u003E Hostname needs to be an empty array. First patch will get installed on PPAN and then it will get installed on all other nodes parallelly.\u003C/li\u003E \u003Cli\u003ESequential Patch Rollback -\u003E Hostname needs to be an empty array. First patch will get installed on PPAN and then it will get installed on all other nodes sequentially.\u003C/li\u003E \u003C/ol\u003E upgradeType param can be specified as PATCH_ROLLBACK for full patch rollback, PATCH_ROLLBACK_SEQUENTIAL for sequential patch rollback. upgrade type is mandatory parameter. ",
+          "operationId": "runRollbackPreChecks",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackPrecheckRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Prechecks for rollback initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/rollback/patch-rollback/pre-checks-status": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Gets status of prechecks for the given precheck report id.",
+          "description": "Get the latest precheck report. ",
+          "operationId": "getRollbackPrecheckStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckID",
+              "in": "query",
+              "description": "preCheckID",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradePrecheckResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid precheck reportId. Please provide valid precheck reportId",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/rollback/patch-rollback/summary": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "get the summary of patch rollback",
+          "description": "get the summary of patch rollback ",
+          "operationId": "patchRollbackSummary",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "exampleSetFlag": true,
+                    "items": {
+                      "$ref": "#/components/schemas/UpgradeSummaryResponse",
+                      "exampleSetFlag": false
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/prepare/get-status": {
+        "get": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "gets status of pre-checks",
+          "description": "get the latest precheck report ",
+          "operationId": "getPrecheckStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckID",
+              "in": "query",
+              "description": "preCheckID",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradePrecheckResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid reportId. Please provide valid reportId",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/prepare/pre-checks": {
+        "post": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "API's to initiate pre-checks execution on PPAN for complete deployment",
+          "description": "API's purpose is to initiate pre-checks execution on PPAN for complete deployment ",
+          "operationId": "runPreChecksInPPAN",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrecheckRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Prechecks initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. Please provide valid inputs",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/proceed/get-status": {
+        "get": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "get the status of upgrade proceed process",
+          "description": "get the status of upgrade process for the requested nodes ",
+          "operationId": "proceedStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeProceed",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/proceed/initiate-upgrade": {
+        "post": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "API's purpose would be to orchestrate upgrade execution on PPAN",
+          "description": "API's purpose would be to orchestrate upgrade execution on PPAN ",
+          "operationId": "initiateUpgradeOnPPAN",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeProceedRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Upgrade initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Unable to trigger upgrade , check error response for more details",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/stage/cancel-stage": {
+        "post": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "API to cancel staging process from PPAN",
+          "description": "API to cancel staging process of specified nodes from PPAN ",
+          "operationId": "cancelStagingOnPPAN",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelStageRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Staging termination task initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/stage/get-status": {
+        "get": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "get the status a particular upgrade stage process",
+          "description": "get the status of upgrade stage process for the requested nodes ",
+          "operationId": "stageStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeListStage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/stage/start-stage": {
+        "post": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "API to initiate staging orcheastration from PPAN",
+          "description": "API to initiate staging orcheastration from PPAN ",
+          "operationId": "initiateStagingOnPPAN",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StageRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Staging initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade/summary/get-status": {
+        "get": {
+          "tags": [
+            "Upgrade"
+          ],
+          "summary": "get the summary of upgrade process",
+          "description": "get the summary of upgrade process ",
+          "operationId": "upgradeSummary",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeProceed",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install": {
+        "post": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Trigger patch installation on the Cisco ISE nodes.",
+          "description": "Trigger patch installation on the Cisco ISE nodes. \u003Cul\u003E \u003Cli\u003EIn Full patch installation, patch will be installed on PPAN first, and then on following nodes.\u003C/li\u003E \u003Cli\u003E In Split patch installation, patch will be installed on PPAN first, and then on the nodes in batches of the remaining iterations.\u003C/li\u003E \u003C/ul\u003E  A task ID is returned which can be used to monitor the progress of the patch installation process. As the patch installation triggers the Cisco ISE to restart, the task API becomes unavailable for a certain period of time. When installation is going on PPAN, then monitor the progress on SPAN GUI. ",
+          "operationId": "installPatch_1",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Patch installation triggered successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. A valid precheck report's id and and hostnames should be provided as query parameters",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install/get-status": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "get the status of patch installation.",
+          "description": "Get the status of patch installation for the requested nodes.  Precheck report Id obtained by running the precheck API can be passed to get the status. ",
+          "operationId": "patchInstallStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeProceed",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "204": {
+              "description": "No content",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NoContentMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. A valid precheck report's id should be provided as query parameter.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install/get-summary": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "get the summary of patch install process",
+          "description": "get the summary of patch install process ",
+          "operationId": "patchSummary",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "exampleSetFlag": true,
+                    "items": {
+                      "$ref": "#/components/schemas/UpgradeSummaryResponse",
+                      "exampleSetFlag": false
+                    }
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden"
+            },
+            "404": {
+              "description": "Not Found"
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install/list-patch": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "List installed patches.",
+          "description": "List all the installed patches in the system with the date of installation. ",
+          "operationId": "getInstalledPatches",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PatchListResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install/pre-checks": {
+        "post": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Initiate prechecks execution on PPAN for complete deployment.",
+          "description": "Initiates prechecks execution on PPAN for complete deployment. It returns a precheck report id, which can be used to trigger patch installation later. Patch installation can happen in three modes : \u003Col\u003E \u003Cli\u003EFull Patch Installation -\u003E Hostname needs to be an empty array. First patch will get installed on PPAN and then it will get installed on all other nodes parallelly.\u003C/li\u003E \u003Cli\u003ESequential Patch Installation -\u003E Hostname needs to be an empty array. First patch will get installed on PPAN and then it will get installed on all other nodes sequentially.\u003C/li\u003E \u003Cli\u003ESplit -\u003E This will happen in batches / iterations. Host name is mandatory. In first iteration only PPAN should be sent as part of hostname. Once the PPAN installation is successfull then remaining nodes can be sent in batches.\u003C/li\u003E \u003C/ol\u003E  upgradeType param can be specified as FULL_PATCH for full patch installation, SPLIT_PATCH for split patch installation and SEQUENTIAL_PATCH for sequential patch installation. upgrade type, patch bundle name, repository name are mandatory parameters. ",
+          "operationId": "runPatchPreChecks",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchPrecheckRequest",
+                  "exampleSetFlag": false
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "OK",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "201": {
+              "description": "Created"
+            },
+            "202": {
+              "description": "Prechecks initiated successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradeTaskResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input. Please provide valid inputs",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      },
+      "/api/v1/upgrade-patch/patch-install/pre-checks-status": {
+        "get": {
+          "tags": [
+            "Patch"
+          ],
+          "summary": "Gets status of prechecks for the given precheck report id.",
+          "description": "Get the latest precheck report. User can get status of an individual check by passing check's name. ",
+          "operationId": "getPatchPrecheckStatus",
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "in": "header",
+              "description": "request Id, will return in the response headers, and appear in logs",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "preCheckReportID",
+              "in": "query",
+              "description": "Precheck report's id.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            },
+            {
+              "name": "precheckName",
+              "in": "query",
+              "description": "Precheck name.",
+              "required": false,
+              "style": "form",
+              "schema": {
+                "type": "string",
+                "exampleSetFlag": true
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UpgradePrecheckResponse",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid precheck reportId. Please provide valid precheck reportId",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/InvalidErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Unauthorized"
+            },
+            "403": {
+              "description": "Forbidden.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ForbiddenErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Not found.",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotFoundErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ServerErrorMessage",
+                    "exampleSetFlag": false
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "BasicAuth": []
+            }
+          ]
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "CancelStageRequest": {
+          "title": "CancelStageRequest",
+          "type": "object",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "f2b7ba4b-6692-48f4-aec8-8681ce651a57",
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "FULL_UPGRADE or SPLIT_UPGRADE",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "ErrorResponse": {
+          "title": "ErrorResponse",
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/components/schemas/Message",
+              "exampleSetFlag": true
+            },
+            "version": {
+              "type": "string",
+              "example": "1.0.0",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "ForbiddenErrorMessage": {
+          "title": "ForbiddenErrorMessage",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Forbidden.",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "InvalidErrorMessage": {
+          "title": "InvalidErrorMessage",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Invalid Inputs. Check request parameters and retry.",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "ListNode": {
+          "title": "ListNode",
+          "type": "object",
+          "properties": {
+            "msg": {
+              "type": "string",
+              "example": "repository precheck passed",
+              "exampleSetFlag": true
+            },
+            "name": {
+              "type": "string",
+              "example": "ise1.sn.test",
+              "exampleSetFlag": true
+            },
+            "status": {
+              "type": "string",
+              "example": "Success",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "ListNodeProceed": {
+          "title": "ListNodeProceed",
+          "type": "object",
+          "properties": {
+            "dbStatus": {
+              "type": "string",
+              "example": "UPGRADE_EXEC_COMPLETED",
+              "exampleSetFlag": true
+            },
+            "message": {
+              "type": "string",
+              "example": "Upgrade completed successfully",
+              "exampleSetFlag": true
+            },
+            "node": {
+              "type": "string",
+              "example": "ise1.sn.test",
+              "exampleSetFlag": true
+            },
+            "percentage": {
+              "type": "integer",
+              "format": "int32",
+              "example": 100,
+              "exampleSetFlag": true
+            },
+            "progressMsg": {
+              "type": "string",
+              "example": "Upgrade completed successfully",
+              "exampleSetFlag": true
+            },
+            "status": {
+              "type": "string",
+              "example": "passed",
+              "exampleSetFlag": true
+            },
+            "upgradeTime": {
+              "type": "integer",
+              "format": "int32",
+              "example": 127,
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "Message": {
+          "title": "Message",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Repository (repo_name) does not exist. Please configure the repository from ISE UI to proceed",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "NoContentMessage": {
+          "title": "NoContentMessage",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "No Content.",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "NodePatchList": {
+          "title": "NodePatchList",
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string",
+              "description": "ISE node name.",
+              "example": "ise90.sn.test",
+              "exampleSetFlag": true
+            },
+            "patchVersions": {
+              "type": "array",
+              "description": "Array of objects, each object containing patch version and installed date.",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/Patch",
+                "exampleSetFlag": false
+              }
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "NodeReportItem": {
+          "title": "NodeReportItem",
+          "required": [
+            "Hostname",
+            "New Personas",
+            "Old Personas",
+            "Role"
+          ],
+          "type": "object",
+          "properties": {
+            "Hostname": {
+              "type": "string",
+              "exampleSetFlag": true
+            },
+            "New Personas": {
+              "type": "string",
+              "exampleSetFlag": true
+            },
+            "Old Personas": {
+              "type": "string",
+              "exampleSetFlag": true
+            },
+            "Role": {
+              "type": "string",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "NodesReport": {
+          "title": "NodesReport",
+          "type": "object",
+          "properties": {
+            "nodes-report": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/NodeReportItem",
+                "exampleSetFlag": false
+              }
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "NotFoundErrorMessage": {
+          "title": "NotFoundErrorMessage",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Not Found.",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "Patch": {
+          "title": "Patch",
+          "type": "object",
+          "properties": {
+            "installDate": {
+              "type": "string",
+              "description": "Date of patch installation.",
+              "example": "Tue Jan 30 04:48:13 2024",
+              "exampleSetFlag": true
+            },
+            "patchNumber": {
+              "type": "integer",
+              "description": "Patch version number.",
+              "format": "int32",
+              "example": 3,
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PatchListResponse": {
+          "title": "PatchListResponse",
+          "type": "object",
+          "properties": {
+            "iseVersion": {
+              "type": "string",
+              "description": "ISE node version.",
+              "example": "3.4.0.345",
+              "exampleSetFlag": true
+            },
+            "patchList": {
+              "type": "array",
+              "description": "Array of objects, each object containing  hostname and patch version numbers and installed dates.",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/NodePatchList",
+                "exampleSetFlag": false
+              }
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PatchPrecheckRequest": {
+          "title": "PatchPrecheckRequest",
+          "required": [
+            "patchBundleName",
+            "repoName",
+            "upgradeType"
+          ],
+          "type": "object",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "patchBundleName": {
+              "type": "string",
+              "example": "ise-patchbundle-2.6.0.156-Patch1-20061206.SPA.x86_64.tar.gz",
+              "exampleSetFlag": true
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "50bc7f99-057a-4d9f-aec4-20b7d4b89846",
+              "exampleSetFlag": true
+            },
+            "preChecks": {
+              "type": "array",
+              "description": "Array of prechecks that needs to be executed.",
+              "example": "[\"DEPLOYMENT_CHECK\",\"TRUST_CERT_CHECK\",\"SYSTEM_CERT_CHECK\",\"REPOSITORY_CHECK\",\"SERVICES_CHECK\",\"LICENSE_CHECK\"]",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "reTrigger": {
+              "type": "boolean",
+              "example": false,
+              "exampleSetFlag": true
+            },
+            "repoName": {
+              "type": "string",
+              "example": "repo_name",
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "FULL_PATCH or SPLIT_PATCH or SEQUENTIAL_PATCH",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PatchRollbackVersionResponse": {
+          "title": "PatchRollbackVersionResponse",
+          "type": "object",
+          "properties": {
+            "currentPatchVersion": {
+              "type": "string",
+              "example": "P2",
+              "exampleSetFlag": true
+            },
+            "currentReleaseVersion": {
+              "type": "string",
+              "example": "3.2",
+              "exampleSetFlag": true
+            },
+            "previousInstalledPatchVersion": {
+              "type": "string",
+              "example": "P1",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PatchTaskResponse": {
+          "title": "PatchTaskResponse",
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/components/schemas/TaskIdResponse",
+              "exampleSetFlag": true
+            },
+            "version": {
+              "type": "string",
+              "example": "1.0.0",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PrecheckRequest": {
+          "title": "PrecheckRequest",
+          "type": "object",
+          "properties": {
+            "bundleName": {
+              "type": "string",
+              "example": "ise-upgradebundle-2.6.x-3.0.x-to-3.1.0.486.NOT_FOR_RELEASE.x86_64.tar.gz",
+              "exampleSetFlag": true
+            },
+            "hostnames": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "patchBundleName": {
+              "type": "string",
+              "example": "ise-patchbundle-2.6.0.156-Patch1-20061206.SPA.x86_64.tar.gz",
+              "exampleSetFlag": true
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "50bc7f99-057a-4d9f-aec4-20b7d4b89846",
+              "exampleSetFlag": true
+            },
+            "preChecks": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "reTrigger": {
+              "type": "boolean",
+              "example": false,
+              "exampleSetFlag": true
+            },
+            "repoName": {
+              "type": "string",
+              "example": "repo_name",
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "FULL_UPGRADE or SPLIT_UPGRADE",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "PrecheckType": {
+          "title": "PrecheckType",
+          "type": "object",
+          "properties": {
+            "checkType": {
+              "type": "string",
+              "example": "local",
+              "exampleSetFlag": true
+            },
+            "displayname": {
+              "type": "string",
+              "example": "Repository Validation",
+              "exampleSetFlag": true
+            },
+            "executionTime": {
+              "type": "integer",
+              "format": "int64",
+              "exampleSetFlag": true
+            },
+            "message": {
+              "type": "string",
+              "exampleSetFlag": true
+            },
+            "name": {
+              "type": "string",
+              "example": "REPOSITORY_CHECK",
+              "exampleSetFlag": true
+            },
+            "nodes": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/ListNode",
+                "exampleSetFlag": false
+              }
+            },
+            "onFailure": {
+              "type": "string",
+              "example": "fail",
+              "exampleSetFlag": true
+            },
+            "percentage": {
+              "type": "integer",
+              "format": "int32",
+              "example": 100,
+              "exampleSetFlag": true
+            },
+            "remediationMsg": {
+              "type": "string",
+              "example": "Repository validation failed. Check if repository configuration is correct and manually validate from UI in Repository page or in CLI using, show repository",
+              "exampleSetFlag": true
+            },
+            "status": {
+              "type": "string",
+              "example": "Success",
+              "exampleSetFlag": true
+            },
+            "successMsg": {
+              "type": "string",
+              "example": "Repository for bundle is validated successfully",
+              "exampleSetFlag": true
+            },
+            "successNodes": {
+              "type": "integer",
+              "format": "int32",
+              "example": 1,
+              "exampleSetFlag": true
+            },
+            "updateTime": {
+              "type": "integer",
+              "format": "int64",
+              "example": 1631513275877,
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "RollbackPrecheckRequest": {
+          "title": "RollbackPrecheckRequest",
+          "required": [
+            "upgradeType"
+          ],
+          "type": "object",
+          "properties": {
+            "preCheckReportID": {
+              "type": "string",
+              "example": "50bc7f99-057a-4d9f-aec4-20b7d4b89846",
+              "exampleSetFlag": true
+            },
+            "preChecks": {
+              "type": "array",
+              "description": "Array of prechecks that needs to be executed.",
+              "example": "[\"DEPLOYMENT_CHECK\",\"SYSTEM_CERT_CHECK\",\"ADMIN_CERT_CHECK\",\"SERVICES_CHECK\",\"PAN_FAILOVER_CHECK\",\"DNS_CHECK\"]",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "reTrigger": {
+              "type": "boolean",
+              "example": false,
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "PATCH_ROLLBACK or PATCH_ROLLBACK_SEQUENTIAL",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "ServerErrorMessage": {
+          "title": "ServerErrorMessage",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Internal server Error.",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "StageRequest": {
+          "title": "StageRequest",
+          "type": "object",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "f2b7ba4b-6692-48f4-aec8-8681ce651a57",
+              "exampleSetFlag": true
+            },
+            "reTrigger": {
+              "type": "boolean",
+              "example": false,
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "FULL_UPGRADE or SPLIT_UPGRADE",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "TaskIdResponse": {
+          "title": "TaskIdResponse",
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "example": "Upgrade task has been initiated.",
+              "exampleSetFlag": true
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "description": "ID which can be used to track the status of task.",
+              "example": "c4aa1432-be06-bf27-11eb-c208a1714b90",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeListStage": {
+          "title": "UpgradeListStage",
+          "type": "object",
+          "properties": {
+            "response": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/UpgradeStage",
+                "exampleSetFlag": false
+              }
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradePrecheckResponse": {
+          "title": "UpgradePrecheckResponse",
+          "type": "object",
+          "properties": {
+            "isValid": {
+              "type": "boolean",
+              "example": false,
+              "exampleSetFlag": true
+            },
+            "iseVersion": {
+              "type": "string",
+              "example": "3.4.0.451",
+              "exampleSetFlag": true
+            },
+            "nodecount": {
+              "type": "integer",
+              "format": "int32",
+              "example": 1,
+              "exampleSetFlag": true
+            },
+            "patchNo": {
+              "type": "integer",
+              "format": "int32",
+              "example": 99,
+              "exampleSetFlag": true
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "f2b7ba4b-6692-48f4-aec8-8681ce651a57",
+              "exampleSetFlag": true
+            },
+            "preChecks": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/PrecheckType",
+                "exampleSetFlag": false
+              }
+            },
+            "status": {
+              "type": "string",
+              "example": "valid",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeProceed": {
+          "title": "UpgradeProceed",
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/ListNodeProceed",
+                "exampleSetFlag": false
+              }
+            },
+            "percentage": {
+              "type": "integer",
+              "format": "int32",
+              "example": 100,
+              "exampleSetFlag": true
+            },
+            "remainingUpgradeTime": {
+              "type": "integer",
+              "format": "int32",
+              "example": 0,
+              "exampleSetFlag": true
+            },
+            "status": {
+              "type": "string",
+              "example": "success",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeProceedRequest": {
+          "title": "UpgradeProceedRequest",
+          "required": [
+            "preCheckReportID",
+            "upgradeType"
+          ],
+          "type": "object",
+          "properties": {
+            "hostnames": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "type": "string",
+                "exampleSetFlag": false
+              }
+            },
+            "preCheckReportID": {
+              "type": "string",
+              "example": "f2b7ba4b-6692-48f4-aec8-8681ce651a57",
+              "exampleSetFlag": true
+            },
+            "upgradeType": {
+              "type": "string",
+              "example": "FULL_UPGRADE or SPLIT_UPGRADE",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeStage": {
+          "title": "UpgradeStage",
+          "type": "object",
+          "properties": {
+            "dbStatus": {
+              "type": "string",
+              "example": "UPGRADE_STAGING_COMPLETED",
+              "exampleSetFlag": true
+            },
+            "message": {
+              "type": "string",
+              "example": "Config Files Backup $ Copy Upgrade DB dump",
+              "exampleSetFlag": true
+            },
+            "node": {
+              "type": "string",
+              "example": "ise1.sn.test",
+              "exampleSetFlag": true
+            },
+            "percentage": {
+              "type": "integer",
+              "format": "int32",
+              "example": 100,
+              "exampleSetFlag": true
+            },
+            "progressMsg": {
+              "type": "string",
+              "example": "Config files backed up successfully",
+              "exampleSetFlag": true
+            },
+            "status": {
+              "type": "string",
+              "example": "passed",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeSummaryResponse": {
+          "title": "UpgradeSummaryResponse",
+          "type": "object",
+          "properties": {
+            "NodesReportSummary": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/NodesReport",
+                "exampleSetFlag": false
+              }
+            },
+            "PrechecksSummary": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/UpgradePrecheckResponse",
+                "exampleSetFlag": false
+              }
+            },
+            "UpgradeSummary": {
+              "type": "array",
+              "exampleSetFlag": true,
+              "items": {
+                "$ref": "#/components/schemas/UpgradeProceed",
+                "exampleSetFlag": false
+              }
+            }
+          },
+          "exampleSetFlag": false
+        },
+        "UpgradeTaskResponse": {
+          "title": "UpgradeTaskResponse",
+          "type": "object",
+          "properties": {
+            "response": {
+              "$ref": "#/components/schemas/TaskIdResponse",
+              "exampleSetFlag": true
+            },
+            "version": {
+              "type": "string",
+              "example": "1.0.0",
+              "exampleSetFlag": true
+            }
+          },
+          "exampleSetFlag": false
+        }
+      }
+    }
+  }

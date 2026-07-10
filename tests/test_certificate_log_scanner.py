@@ -1,0 +1,89 @@
+# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+
+import sys
+from pathlib import Path
+
+import pytest
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+
+def _write(tmp_path, lines):
+    p = tmp_path / "ise-psc.log"
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def _ts(minute):
+    # All within the same hour so they fall in a 120-minute window.
+    return f"2026-07-03 10:{minute:02d}:00.000 +00:00"
+
+
+class TestCertificateLogScanner:
+    def test_matches_runtime_signal(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            f"{_ts(1)} INFO normal startup line",
+            f"{_ts(2)} ERROR PKIX path building failed: unable to find valid certification path",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result is not None
+        assert result["total_matches"] == 1
+        assert any("PKIX" in line for line in result["matches"])
+
+    def test_matches_radius_code_and_mgmt_signal(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            f"{_ts(1)} 12514 EAP-TLS failed SSL/TLS handshake",
+            f"{_ts(2)} CertMgmtUtils Failed to parse certificate",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 2
+
+    def test_no_match_returns_none(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            f"{_ts(1)} INFO healthy line",
+            f"{_ts(2)} INFO another benign line about a certificate being loaded",
+        ])
+        # bare "certificate" is NOT a signal, so this benign line must not match.
+        assert CertificateLogScanner().scan(p) is None
+
+    def test_dropped_broad_tokens_do_not_match(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            f"{_ts(1)} INFO OCSP responder status OK",
+            f"{_ts(2)} INFO CRL downloaded; NotAfter far in future",
+            f"{_ts(3)} INFO cert uses SHA256withECDSA",
+        ])
+        assert CertificateLogScanner().scan(p) is None
+
+    def test_caps_at_five_and_counts_total(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        lines = [f"{_ts(i)} ERROR Unknown CA hit number {i}" for i in range(1, 9)]
+        p = _write(tmp_path, lines)
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 8
+        assert len(result["matches"]) == 5
+
+    def test_window_excludes_old_lines(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "2026-07-03 05:00:00.000 +00:00 ERROR Unknown CA old, out of window",
+            "2026-07-03 10:00:00.000 +00:00 ERROR Unknown CA recent, in window",
+        ])
+        result = CertificateLogScanner().scan(p)
+        # Window is 120 min anchored to the latest ts (10:00), so 05:00 is excluded.
+        assert result["total_matches"] == 1
+        assert "recent" in result["matches"][0]
+
+    def test_lines_without_timestamp_are_ignored_for_window(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "no-timestamp Unknown CA stray continuation line",
+            f"{_ts(1)} ERROR Unknown CA proper line",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 1

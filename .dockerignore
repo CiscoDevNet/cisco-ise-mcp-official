@@ -1,0 +1,30 @@
+# Virtual environment
+.venv/
+venv/
+__pycache__/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+
+# API specs and configs (not needed at runtime)
+api_specs/
+api_client_config/
+scripts/
+
+# Misc
+*.pyc
+*.pyo
+.DS_Store
+
