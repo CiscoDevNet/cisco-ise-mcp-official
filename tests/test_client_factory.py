@@ -260,5 +260,6 @@ class TestClientFactoryCertMode:
             assert client.prefix == "Basic"
             assert client.token == "dXNlcjpwYXNz"
             assert client.injected_async is None
+            assert client.injected_sync is None
         finally:
             reset_per_user_credential(token)

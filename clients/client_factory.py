@@ -75,8 +75,8 @@ class ClientFactory:
     ``token`` string and a ``prefix``; we keep that contract rather than
     forking generated code. Configuration (host, port, credentials,
     timeouts) is sourced from ``clients.settings.settings``. The shared
-    SSL context (TLS 1.2+, peer verification disabled per design) comes
-    from ``clients.tls.build_ssl_context``.
+    SSL context (TLS 1.2+, peer verification on by default and configurable
+    via ISE_VERIFY_SERVER_CERT) comes from ``clients.tls.build_ssl_context``.
     """
 
     def __init__(self) -> None:
@@ -287,6 +287,9 @@ class ClientFactory:
         )
         client.set_async_httpx_client(async_httpx)
         client.set_httpx_client(sync_httpx)
+        # IMPORTANT: do not call with_* methods (with_headers/with_cookies/with_timeout)
+        # on this client: attrs evolve() resets injected_async/injected_sync to None,
+        # which would make the client emit a malformed empty Authorization header.
         return client
 
     def register_client_class(

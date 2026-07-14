@@ -108,9 +108,9 @@ class MNTClient:
     Settings, ``SecretStr``-backed password). The async HTTP client is
     created during ``setup()`` (call during server startup).
 
-    Security posture: TLS peer verification is intentionally disabled
-    (see ``clients/tls.py``); TLS 1.2+ is enforced. Redirects are not
-    followed.
+    Security posture: TLS peer verification is on by default (configurable
+    via ISE_VERIFY_SERVER_CERT, see ``clients/tls.py``); TLS 1.2+ is enforced.
+    Redirects are not followed.
     """
 
     _instance: Optional["MNTClient"] = None

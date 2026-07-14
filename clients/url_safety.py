@@ -4,14 +4,10 @@
 Endpoint string guardrails for ISE clients.
 
 These helpers reject obviously dangerous ``endpoint`` arguments before
-they get concatenated to a client's ``base_url``. Necessary because:
-
-1. Tool-handler arguments may originate (indirectly) from LLM-supplied
-   inputs.
-2. With TLS peer verification disabled (see ``clients/tls.py``), a
-   successful path-traversal or scheme-injection on ``endpoint`` is
-   harder to detect after the fact -- TLS will not catch a wrong
-   destination.
+they get concatenated to a client's ``base_url``. Necessary because
+tool-handler arguments may originate (indirectly) from LLM-supplied
+inputs, and a successful path-traversal or scheme-injection on
+``endpoint`` could redirect requests to unintended destinations.
 
 The checks are intentionally minimal (guardrails, not an allow-list);
 allow-listing per client is a GA item.
