@@ -79,12 +79,12 @@ The server will be available at `http://localhost:5000`
 |----------|-------------|---------|----------|
 | `ISE_IP` | ISE PAN host/IP | — | Yes |
 | `API_PORT` | ISE PAN port | `443` | No |
-| `API_USERNAME` | ISE service-account username (fallback auth) | — | See below |
-| `API_PWD` | ISE service-account password (fallback auth) | — | See below |
+| `API_USERNAME` | ISE service-account username | — | See below |
+| `API_PWD` | ISE service-account password | — | See below |
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
 | `ISE_CREDENTIAL_HEADER_NAME` | Inbound header carrying the per-user ISE credential | `X-ISE-Authorization` | No |
-| `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of falling back to the service account | `false` | No |
+| `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of using the service account | `false` | No |
 | `ISE_CLIENT_CERT` | Path to the client certificate PEM (cert-based auth; see below) | — | No |
 | `ISE_CLIENT_KEY` | Path to the client private-key PEM (required with `ISE_CLIENT_CERT`) | — | No |
 | `ISE_CLIENT_KEY_PASSWORD` | Passphrase for an encrypted client key | — | No |
@@ -92,10 +92,11 @@ The server will be available at `http://localhost:5000`
 | `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
 | `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
 
-`API_USERNAME` / `API_PWD` are the **fallback** service-account credentials used
-when a request does not carry the per-user `X-ISE-Authorization` header. They are
-required unless every client sends that header (see [Authentication](#authentication));
-with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` they can be left empty.
+`API_USERNAME` / `API_PWD` are the service-account credentials used when a request
+does not carry the per-user `X-ISE-Authorization` header or a client certificate.
+They are required unless every client sends that header (see
+[Authentication](#authentication)); with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` or a
+client certificate configured, they can be left empty.
 
 See [Authentication](#authentication) for how these credentials, the client
 certificate, and server-certificate verification fit together.
@@ -206,17 +207,16 @@ first that applies, in this order:
    curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
      --cert client.pem --key client.key -H "Accept: application/json"
    ```
-3. **Service-account fallback** — the `API_USERNAME` / `API_PWD` credentials from
-   `.env` are used when neither of the above applies.
+3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
+   are used when neither of the above applies.
 
 Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
-per-user header instead of falling back (a configured client certificate still
-satisfies the request).
+per-user header instead of using the service account (a configured client
+certificate still satisfies the request).
 
-**Server certificate verification** is **enabled by default**. Earlier builds
-disabled it; upgrading enforces it, which may break connections to ISE nodes
-presenting self-signed or internal-CA certificates until you configure trust
-(`ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, `ISE_CA_BUNDLE` — see the
+**Server certificate verification** is **enabled by default**. To connect to ISE
+nodes presenting self-signed or internal-CA certificates, configure trust via
+`ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, and `ISE_CA_BUNDLE` (see the
 [Configuration](#configuration) table).
 
 ## Available Tools
