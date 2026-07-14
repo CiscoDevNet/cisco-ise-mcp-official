@@ -1,0 +1,31 @@
+tests/test_client_factory.py
+  s_dc8c196f9fbb4d::t_4bc0860da4b4ea 263
+clients/url_safety.py
+  s_dc8c196f9fbb4d::t_ee9d40f993b114 7-10
+clients/client_factory.py
+  s_dc8c196f9fbb4d::t_9afb606fccb7dd 290-292
+  s_dc8c196f9fbb4d::t_6d5fd041702cf7 78-79
+clients/mnt_client.py
+  s_dc8c196f9fbb4d::t_d9b4c7ab520409 111-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "2e1a2b33d44da42dd147def7beb3880fefc1e967",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
