@@ -85,11 +85,21 @@ The server will be available at `http://localhost:5000`
 | `PORT` | Port the MCP server listens on | `5000` | No |
 | `ISE_CREDENTIAL_HEADER_NAME` | Inbound header carrying the per-user ISE credential | `X-ISE-Authorization` | No |
 | `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of falling back to the service account | `false` | No |
+| `ISE_CLIENT_CERT` | Path to the client certificate PEM (cert-based auth; see below) | — | No |
+| `ISE_CLIENT_KEY` | Path to the client private-key PEM (required with `ISE_CLIENT_CERT`) | — | No |
+| `ISE_CLIENT_KEY_PASSWORD` | Passphrase for an encrypted client key | — | No |
+| `ISE_VERIFY_SERVER_CERT` | Verify the ISE server certificate | `true` | No |
+| `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
+| `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
 
 `API_USERNAME` / `API_PWD` are the **fallback** service-account credentials used
 when a request does not carry the per-user `X-ISE-Authorization` header. They are
 required unless every client sends that header (see [Authentication](#authentication));
 with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` they can be left empty.
+
+See [Certificate-based authentication](#certificate-based-authentication) and
+[Server certificate verification](#server-certificate-verification) for details
+on the certificate options.
 
 ## API Endpoints
 
