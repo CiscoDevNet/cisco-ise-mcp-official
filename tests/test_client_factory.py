@@ -23,6 +23,25 @@ class _FakeClient:
         self.token = token
 
 
+class _CertFakeClient:
+    """Fake AuthenticatedClient that records injected httpx clients."""
+
+    def __init__(self, base_url, prefix, token, verify_ssl, timeout, follow_redirects):
+        self.base_url = base_url
+        self.prefix = prefix
+        self.token = token
+        self.injected_async = None
+        self.injected_sync = None
+
+    def set_async_httpx_client(self, client):
+        self.injected_async = client
+        return self
+
+    def set_httpx_client(self, client):
+        self.injected_sync = client
+        return self
+
+
 class TestClientFactoryGetClient:
     def _make_factory(self):
         from clients.client_factory import ClientFactory, ClientName
@@ -45,6 +64,7 @@ class TestClientFactoryGetClient:
                 mock_settings.api_username = "admin"
                 mock_settings.api_pwd.get_secret_value.return_value = "secret"
                 mock_settings.require_per_user_credential = False
+                mock_settings.client_cert_configured = False
                 mock_settings.connect_timeout_s = 5.0
                 mock_settings.read_timeout_s = 30.0
                 mock_settings.write_timeout_s = 10.0
@@ -109,6 +129,7 @@ class TestClientFactoryGetClient:
         try:
             with patch("clients.client_factory.settings") as mock_settings:
                 mock_settings.require_per_user_credential = True
+                mock_settings.client_cert_configured = False
                 mock_settings.credential_header_name = "X-ISE-Authorization"
                 with pytest.raises(MissingIseCredentialError):
                     factory.get_client(ClientName.ENDPOINTS)
@@ -126,6 +147,7 @@ class TestClientFactoryGetClient:
                 mock_settings.ise_ip = "10.0.0.1"
                 mock_settings.api_port = 443
                 mock_settings.require_per_user_credential = False
+                mock_settings.client_cert_configured = False
                 mock_settings.api_username = None
                 mock_settings.api_pwd = None
                 mock_settings.credential_header_name = "X-ISE-Authorization"
@@ -170,3 +192,73 @@ class TestClientFactoryGetClient:
         entry = factory._client_registry[ClientName.ENDPOINTS]
         assert entry.client_class is _FakeClient
         assert entry.base_path == "/custom"
+
+
+class TestClientFactoryCertMode:
+    def _make_factory(self):
+        from clients.client_factory import ClientFactory, ClientName
+        factory = ClientFactory()
+        for name in ClientName:
+            factory.register_client_class(name, _CertFakeClient, "/fake")
+        return factory
+
+    def _cert_settings(self, mock_settings):
+        mock_settings.ise_ip = "10.0.0.1"
+        mock_settings.api_port = 443
+        mock_settings.require_per_user_credential = False
+        mock_settings.client_cert_configured = True
+        mock_settings.connect_timeout_s = 5.0
+        mock_settings.read_timeout_s = 30.0
+        mock_settings.write_timeout_s = 10.0
+        mock_settings.pool_timeout_s = 5.0
+
+    def test_cert_mode_injects_httpx_clients_no_auth_header(self):
+        from clients.client_factory import ClientName
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        factory = self._make_factory()
+        token = set_per_user_credential(None)
+        try:
+            with patch("clients.client_factory.settings") as mock_settings:
+                self._cert_settings(mock_settings)
+                with patch("clients.client_factory.build_ssl_context", return_value=None):
+                    client = factory.get_client(ClientName.ENDPOINTS)
+            # An httpx client was injected (bypassing the auth-header branch).
+            assert client.injected_async is not None
+            assert client.injected_sync is not None
+        finally:
+            reset_per_user_credential(token)
+
+    def test_cert_mode_client_cached(self):
+        from clients.client_factory import ClientName
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        factory = self._make_factory()
+        token = set_per_user_credential(None)
+        try:
+            with patch("clients.client_factory.settings") as mock_settings:
+                self._cert_settings(mock_settings)
+                with patch("clients.client_factory.build_ssl_context", return_value=None):
+                    c1 = factory.get_client(ClientName.ENDPOINTS)
+                    c2 = factory.get_client(ClientName.ENDPOINTS)
+            assert c1 is c2
+        finally:
+            reset_per_user_credential(token)
+
+    def test_per_user_header_wins_over_cert_mode(self):
+        from clients.client_factory import ClientName
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        factory = self._make_factory()
+        token = set_per_user_credential("Basic dXNlcjpwYXNz")
+        try:
+            with patch("clients.client_factory.settings") as mock_settings:
+                self._cert_settings(mock_settings)
+                with patch("clients.client_factory.build_ssl_context", return_value=None):
+                    client = factory.get_client(ClientName.ENDPOINTS)
+            # Per-user path sets prefix/token and does NOT inject an httpx client.
+            assert client.prefix == "Basic"
+            assert client.token == "dXNlcjpwYXNz"
+            assert client.injected_async is None
+        finally:
+            reset_per_user_credential(token)
