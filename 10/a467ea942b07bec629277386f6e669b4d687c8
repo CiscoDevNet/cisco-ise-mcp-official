@@ -1,0 +1,25 @@
+README.md
+  s_dc8c196f9fbb4d::t_1993c207ead42f 100-101
+  s_dc8c196f9fbb4d::t_6398438e5a6a0e 192-216,218-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "10a467ea942b07bec629277386f6e669b4d687c8",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
