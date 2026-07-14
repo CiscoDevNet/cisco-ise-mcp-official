@@ -97,9 +97,8 @@ when a request does not carry the per-user `X-ISE-Authorization` header. They ar
 required unless every client sends that header (see [Authentication](#authentication));
 with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` they can be left empty.
 
-See [Certificate-based authentication](#certificate-based-authentication) and
-[Server certificate verification](#server-certificate-verification) for details
-on the certificate options.
+See [Authentication](#authentication) for how these credentials, the client
+certificate, and server-certificate verification fit together.
 
 ## API Endpoints
 
@@ -190,50 +189,35 @@ add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in the project):
 
 ### Authentication
 
-The server accepts an optional per-request `X-ISE-Authorization` header carrying a
-pre-built `Basic <base64(username:password)>` ISE credential. When a client does not
-send it, the server falls back to the service-account credentials from `.env`
-(`API_USERNAME` / `API_PWD`).
+The server can authenticate to ISE three ways. For each request it picks the
+first that applies, in this order:
 
-- The header name is configurable via `ISE_CREDENTIAL_HEADER_NAME`.
-- Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
-  header instead of falling back to the service account.
+1. **Per-user credential header** — an inbound `X-ISE-Authorization` header
+   carrying a pre-built `Basic <base64(username:password)>` credential is used
+   verbatim. The header name is configurable via `ISE_CREDENTIAL_HEADER_NAME`.
+2. **Client certificate** — when `ISE_CLIENT_CERT` and `ISE_CLIENT_KEY` are set
+   (and no per-user header is present), the certificate is presented on the TLS
+   connection and **no `Authorization` header is sent** — ISE identifies the API
+   user from the certificate. Cert and key must be supplied together; add
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. This is the
+   programmatic equivalent of:
 
-### Certificate-based authentication
+   ```bash
+   curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
+     --cert client.pem --key client.key -H "Accept: application/json"
+   ```
+3. **Service-account fallback** — the `API_USERNAME` / `API_PWD` credentials from
+   `.env` are used when neither of the above applies.
 
-Instead of a username/password, the server can authenticate to ISE with a
-client certificate. When `ISE_CLIENT_CERT` and `ISE_CLIENT_KEY` are set, the
-certificate is presented on the TLS connection and **no `Authorization`
-header is sent** — ISE identifies the API user from the certificate. This is
-the programmatic equivalent of:
+Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
+per-user header instead of falling back (a configured client certificate still
+satisfies the request).
 
-```bash
-curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
-  --cert client.pem --key client.key -H "Accept: application/json"
-```
-
-Configuration (`.env`):
-
-| Variable | Purpose |
-|---|---|
-| `ISE_CLIENT_CERT` | Path to the client certificate PEM |
-| `ISE_CLIENT_KEY` | Path to the client private-key PEM |
-| `ISE_CLIENT_KEY_PASSWORD` | Passphrase, only if the key is encrypted |
-
-Cert and key must be supplied together. A forwarded per-user
-`X-ISE-Authorization` header still takes precedence over certificate auth.
-
-### Server certificate verification
-
-Server-certificate verification is **enabled by default**. Earlier builds
+**Server certificate verification** is **enabled by default**. Earlier builds
 disabled it; upgrading enforces it, which may break connections to ISE nodes
-presenting self-signed or internal-CA certificates until you configure trust.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `ISE_VERIFY_SERVER_CERT` | `true` | Set `false` to disable verification (testing only) |
-| `ISE_VERIFY_HOSTNAME` | `true` | Set `false` to verify the chain but skip hostname/SAN matching (useful for bare-IP connections). Must be `false` when `ISE_VERIFY_SERVER_CERT=false` |
-| `ISE_CA_BUNDLE` | _(unset)_ | Path to a CA / self-signed certificate to trust; when unset the system trust store is used |
+presenting self-signed or internal-CA certificates until you configure trust
+(`ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, `ISE_CA_BUNDLE` — see the
+[Configuration](#configuration) table).
 
 ## Available Tools
 
