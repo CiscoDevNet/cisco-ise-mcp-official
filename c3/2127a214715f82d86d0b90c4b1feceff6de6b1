@@ -1,0 +1,29 @@
+tests/test_tls.py
+  s_dc8c196f9fbb4d::t_75e2c525a98f71 115-118
+  s_dc8c196f9fbb4d::t_f08f9a68efc3d0 54-59
+  s_dc8c196f9fbb4d::t_f430a0162e8d84 4,9-53,60-79,82,84-90,92-98,100-105,107,109-114,119-139,143-149
+clients/tls.py
+  s_dc8c196f9fbb4d::t_7fe2ae8f496e09 53-54
+  s_dc8c196f9fbb4d::t_711eddce0347c1 6-22,27,34,36-39,42-43,48-52,55-71,75-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "c32127a214715f82d86d0b90c4b1feceff6de6b1",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
