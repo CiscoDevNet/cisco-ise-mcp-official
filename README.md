@@ -189,6 +189,42 @@ send it, the server falls back to the service-account credentials from `.env`
 - Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
   header instead of falling back to the service account.
 
+### Certificate-based authentication
+
+Instead of a username/password, the server can authenticate to ISE with a
+client certificate. When `ISE_CLIENT_CERT` and `ISE_CLIENT_KEY` are set, the
+certificate is presented on the TLS connection and **no `Authorization`
+header is sent** — ISE identifies the API user from the certificate. This is
+the programmatic equivalent of:
+
+```bash
+curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
+  --cert client.pem --key client.key -H "Accept: application/json"
+```
+
+Configuration (`.env`):
+
+| Variable | Purpose |
+|---|---|
+| `ISE_CLIENT_CERT` | Path to the client certificate PEM |
+| `ISE_CLIENT_KEY` | Path to the client private-key PEM |
+| `ISE_CLIENT_KEY_PASSWORD` | Passphrase, only if the key is encrypted |
+
+Cert and key must be supplied together. A forwarded per-user
+`X-ISE-Authorization` header still takes precedence over certificate auth.
+
+### Server certificate verification
+
+Server-certificate verification is **enabled by default**. Earlier builds
+disabled it; upgrading enforces it, which may break connections to ISE nodes
+presenting self-signed or internal-CA certificates until you configure trust.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ISE_VERIFY_SERVER_CERT` | `true` | Set `false` to disable verification (testing only) |
+| `ISE_VERIFY_HOSTNAME` | `true` | Set `false` to verify the chain but skip hostname/SAN matching (useful for bare-IP connections). Must be `false` when `ISE_VERIFY_SERVER_CERT=false` |
+| `ISE_CA_BUNDLE` | _(unset)_ | Path to a CA / self-signed certificate to trust; when unset the system trust store is used |
+
 ## Available Tools
 
 See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
