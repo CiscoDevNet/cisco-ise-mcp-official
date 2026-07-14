@@ -242,16 +242,21 @@ class MNTClient:
         Returns ``(per_call_kwargs, auth_path_label)`` where
         ``per_call_kwargs`` is spread into ``httpx.AsyncClient.get(...)``
         and ``auth_path_label`` is a stable string for logs
-        (``"per_user_credential"`` or ``"service_account"``).
+        (``"per_user_credential"``, ``"client_certificate"``, or
+        ``"service_account"``).
 
-        Selection order matches the original inline logic in ``get()``:
+        Selection order (precedence, highest first):
           1. If the inbound MCP request carried an
              ``X-ISE-Authorization`` header, attach it verbatim plus a
              no-op ``auth=`` flow so httpx's client-level BasicAuth
              cannot overwrite us.
-          2. Else, if ``require_per_user_credential`` is True, refuse.
-          3. Else, if no SA creds are configured, refuse loudly.
-          4. Otherwise, return empty kwargs (client-level BasicAuth
+          2. Else, if a client certificate is configured, send no
+             ``Authorization`` header plus a no-op ``auth=`` flow (so
+             the client-level BasicAuth can't inject SA creds); the
+             cert authenticates the request via the shared TLS context.
+          3. Else, if ``require_per_user_credential`` is True, refuse.
+          4. Else, if no SA creds are configured, refuse loudly.
+          5. Otherwise, return empty kwargs (client-level BasicAuth
              does the work) and label it as SA fallback.
         """
         per_user_credential = get_per_user_credential()
@@ -263,6 +268,12 @@ class MNTClient:
                 },
                 "per_user_credential",
             )
+        # Cert mode: client cert configured -> standalone auth. Send no
+        # Authorization header; _NoOpAuth neutralises the client-level
+        # BasicAuth so it can't inject SA creds. The cert itself (loaded
+        # in the shared TLS context) authenticates the request.
+        if settings.client_cert_configured:
+            return ({"auth": _NoOpAuth()}, "client_certificate")
         if settings.require_per_user_credential:
             raise MissingIseCredentialError(
                 "ISE_REQUIRE_PER_USER_CREDENTIAL=true but no "
