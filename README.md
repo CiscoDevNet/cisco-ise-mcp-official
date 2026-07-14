@@ -18,16 +18,6 @@ tools, inspect their schemas, and call them from natural language prompts.
 - **Protocol:** Streamable HTTP
 - **Default URL:** `http://localhost:5000/mcp/`
 
-## Limitations
-
-- **Log fetching depends on a prior UI download.** Log data is retrieved through
-  ISE's web server (the UI download mechanism), not a dedicated log API. A given
-  log file can only be fetched if it has been **downloaded from the ISE UI at
-  least once before**; if that manual download was never performed, the log fetch
-  will not succeed. This does **not** break the tool — the affected tool still
-  returns its other results gracefully, and only the log-derived portion of the
-  output is unavailable.
-
 ## Pre-requisites
 
 - Python 3.12
@@ -222,6 +212,21 @@ nodes presenting self-signed or internal-CA certificates, configure trust via
 ## Available Tools
 
 See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
+
+## Limitations
+
+- **Log fetching depends on a prior UI download.** Log data is retrieved through
+  ISE's web server (the UI download mechanism), not a dedicated log API. A given
+  log file can only be fetched if it has been **downloaded from the ISE UI at
+  least once before**; if that manual download was never performed, the log fetch
+  will not succeed. This does **not** break the tool — the affected tool still
+  returns its other results gracefully, and only the log-derived portion of the
+  output is unavailable.
+- **Log fetching may work only with username/password authentication.** Because
+  logs go through ISE's web server rather than the API, log fetching is expected
+  to work with the service-account (`API_USERNAME` / `API_PWD`) or per-user
+  `X-ISE-Authorization` credential flows, but not with client-certificate
+  authentication. Other tool results are unaffected under cert auth.
 
 ## Development
 
