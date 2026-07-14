@@ -1,0 +1,26 @@
+.env.example
+  s_dc8c196f9fbb4d::t_8813fdc4b106b8 4-6,8-16,18-26,30
+README.md
+  s_dc8c196f9fbb4d::t_089ad1d1b49ecc 192-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "425eb234f89ef18c99b9b2b78708ace684c15985",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
