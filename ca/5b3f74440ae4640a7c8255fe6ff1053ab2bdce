@@ -1,0 +1,30 @@
+README.md
+  s_dc8c196f9fbb4d::t_dfe16a0dd3e780 41-43
+.dockerignore
+  s_dc8c196f9fbb4d::t_5821edef61ffbd 26-32
+docker-compose.yml
+  s_dc8c196f9fbb4d::t_ee1fe2ae7553e3 23-30
+.gitignore
+  s_dc8c196f9fbb4d::t_8ab11174b14108 62-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ca5b3f74440ae4640a7c8255fe6ff1053ab2bdce",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
