@@ -1,0 +1,28 @@
+clients/settings.py
+  s_dc8c196f9fbb4d::t_34b352fe00b6f4 12,15
+  s_dc8c196f9fbb4d::t_1badad012031e9 56-57
+  s_dc8c196f9fbb4d::t_299b8279ff5330 104-171
+tests/test_settings_cert_auth.py
+  s_dc8c196f9fbb4d::t_78b928886c16b6 1-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "52158b06a7fcba34457c6f26ba1f4485157eab31",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
