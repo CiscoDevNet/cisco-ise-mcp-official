@@ -38,6 +38,9 @@ cp .env.example .env
 # Edit .env with your ISE credentials
 ```
 
+See [Configuration](#configuration) for every setting, including the
+authentication approaches and server-certificate verification.
+
 ### 2. Install Dependencies
 
 ```bash

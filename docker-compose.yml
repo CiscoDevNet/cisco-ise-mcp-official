@@ -18,12 +18,14 @@ services:
     container_name: ise-mcp-server
     ports:
       - "5000:5000"
-    # MCP's MnT and Deployment-API calls target the local ISE PAN over
-    # the bridge network. host.docker.internal:host-gateway resolves
-    # to the container's host so the hardcoded _PAN_HOST_FOR_MNT in
-    # clients/mnt_client.py reaches the local PAN. Required.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     env_file:
       - .env
+    # Client-certificate auth: the ISE_CLIENT_CERT / ISE_CLIENT_KEY /
+    # ISE_CA_BUNDLE paths in .env must be CONTAINER paths, and the files must
+    # exist inside the container (settings validation fails loud at startup
+    # otherwise). Mount them read-only from a host ./certs directory rather
+    # than baking key material into the image, and point the .env paths at
+    # /certs, e.g. ISE_CLIENT_CERT=/certs/client.pem. Uncomment to enable:
+    # volumes:
+    #   - ./certs:/certs:ro
     restart: unless-stopped
