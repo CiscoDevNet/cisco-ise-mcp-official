@@ -1,0 +1,29 @@
+clients/mnt_client.py
+  s_dc8c196f9fbb4d::t_52a70f472650ed 266-271
+tests/test_mnt_client.py
+  s_dc8c196f9fbb4d::t_97024bee33a3d5 161-195
+  s_dc8c196f9fbb4d::t_9f1985c46b4340 149
+  s_dc8c196f9fbb4d::t_6bb3213db8b02d 131
+  s_dc8c196f9fbb4d::t_cad1541a2bab5f 111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0106fa57e93799f365cc67f342d6aa25e18b0c3b",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
