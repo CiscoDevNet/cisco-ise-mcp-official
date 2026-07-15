@@ -188,7 +188,9 @@ first that applies, in this order:
    (and no per-user header is present), the certificate is presented on the TLS
    connection and **no `Authorization` header is sent** — ISE identifies the API
    user from the certificate. Cert and key must be supplied together; add
-   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted.
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. For step-by-step setup
+   on the ISE side, see
+   [How to configure certificate-based authentication for Cisco ISE](https://community.cisco.com/t5/security-blogs/how-to-configure-certificate-based-authentication-for-cisco-ise/bc-p/5372752).
 3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
    are used when neither of the above applies.
 
@@ -200,6 +202,40 @@ certificate still satisfies the request).
 nodes presenting self-signed or internal-CA certificates, configure trust via
 `ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, and `ISE_CA_BUNDLE` (see the
 [Configuration](#configuration) table).
+
+## Security Best Practices
+
+This server talks to ISE's REST APIs — the ERS APIs and the Open APIs, both over
+HTTPS on port 443. Treat the credentials and certificates it uses as production
+secrets: source them in a secure manner (environment variables, a secrets
+manager, or a key management service — never hard-coded or committed), and apply
+the practices below.
+
+### Least-privilege API accounts
+
+API access requires a user (internal or from an external Active Directory group)
+mapped to one of the ERS roles. Grant the **narrowest** role that works:
+
+- **ERS Operator** — read-only (`GET` only). Prefer this for the service account,
+  since the tools here are primarily read/investigation oriented.
+- **ERS Admin** — full CRUD (`GET`, `POST`, `PUT`, `DELETE`). Use only if a
+  workflow genuinely needs writes.
+- **Super Admin** — can access all API services; avoid using it for automation.
+
+### Prefer certificate-based authentication
+
+Certificate-based authentication for the ISE APIs is supported from **Cisco ISE
+Release 3.3 onwards** (see the
+[ISE 3.3 Release Notes](https://www.cisco.com/c/en/us/td/docs/security/ise/3-3/release_notes/b_ise_33_RN.html#concept_y2r_qph_gxb)).
+
+- **Rotate certificates regularly** on a defined schedule, issue them with
+  **shorter validity periods**, and **monitor expiration** with alerts.
+- Use **strong keys** — minimum **2048-bit RSA** or **256-bit ECC**.
+- Store the private key **encrypted at rest** and supply its passphrase
+  via `ISE_CLIENT_KEY_PASSWORD`.
+- For high-security production environments, manage certificates and keys with a
+  dedicated **Key Management Service** (HashiCorp Vault, AWS KMS, etc.).
+- Never commit `.env`, certificates, or key material to version control.
 
 ## Available Tools
 
