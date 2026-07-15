@@ -74,8 +74,7 @@ class IseCredentialMiddleware(Middleware):
             # bearer credential (Base64 of ``user:password``) and must
             # not reach any logfile.
             logger.info(
-                "MCP middleware: received %s",
-                settings.credential_header_name,
+                f"MCP middleware: received {settings.credential_header_name}"
             )
         else:
             # Loud INFO so the missing-header case is unmistakable in
@@ -105,9 +104,8 @@ class IseCredentialMiddleware(Middleware):
                     "service-account credentials"
                 )
             logger.info(
-                "MCP middleware: NO %s on this request -- %s",
-                settings.credential_header_name,
-                next_step,
+                f"MCP middleware: NO {settings.credential_header_name} on "
+                f"this request -- {next_step}"
             )
 
         token = set_per_user_credential(header_value)
