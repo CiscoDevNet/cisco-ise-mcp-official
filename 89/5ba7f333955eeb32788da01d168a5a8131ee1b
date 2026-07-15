@@ -1,0 +1,35 @@
+README.md
+  s_5ff0ac48c452b5::t_44f32050d99d11 191
+utils/ise_credential_middleware.py
+  s_dc8c196f9fbb4d::t_4cad5188a57a79 77
+  s_dc8c196f9fbb4d::t_2ee8a19a154733 107-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "895ba7f333955eeb32788da01d168a5a8131ee1b",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_5ff0ac48c452b5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "403b7cd6-5609-4102-9611-93fc08b7863e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
