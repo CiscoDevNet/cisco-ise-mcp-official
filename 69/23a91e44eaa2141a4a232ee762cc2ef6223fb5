@@ -1,0 +1,31 @@
+clients/mnt_client.py
+  s_dc8c196f9fbb4d::t_b76684ef9ba11d 208-220
+  s_dc8c196f9fbb4d::t_166dcf606210bf 187-190
+tests/test_settings_cert_auth.py
+  s_dc8c196f9fbb4d::t_19c0856145f758 22-26,28
+utils/ise_credential_middleware.py
+  s_dc8c196f9fbb4d::t_0783d611c33f6d 83-106,108,110
+tests/test_ise_credential_middleware.py
+  s_dc8c196f9fbb4d::t_f593fe5b957602 124-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "6923a91e44eaa2141a4a232ee762cc2ef6223fb5",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_dc8c196f9fbb4d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70189f8f-b325-4999-97e5-6dede995b26b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
