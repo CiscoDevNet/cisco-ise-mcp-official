@@ -2,11 +2,6 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes Cisco ISE API operations as agent-callable tools over Streamable HTTP.
 
-> **Beta (v0.1.0)** — This server is under active development. Tool names, input
-> schemas, and response shapes may change between releases. It is intended for
-> evaluation and supervised use; it is **not yet recommended for unsupervised
-> production automation**. Feedback and issue reports are very welcome.
-
 ## Overview
 
 This server provides Cisco ISE tools for live session search, AAA failure
@@ -193,13 +188,7 @@ first that applies, in this order:
    (and no per-user header is present), the certificate is presented on the TLS
    connection and **no `Authorization` header is sent** — ISE identifies the API
    user from the certificate. Cert and key must be supplied together; add
-   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. This is the
-   programmatic equivalent of:
-
-   ```bash
-   curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
-     --cert client.pem --key client.key -H "Accept: application/json"
-   ```
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted.
 3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
    are used when neither of the above applies.
 

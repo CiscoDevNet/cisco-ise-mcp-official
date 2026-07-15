@@ -847,14 +847,6 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
   - `observations`: Human-readable derived observations about node health (including replication/process signals)
   - `system_stats`: Log-derived per-node system statistics: top-level `anchor`, `duration_minutes`, and `nodes` (keyed by hostname). Each node is either `{status: "ok", window: {start, end}, sample_count, cpu_percent, memory_percent, disk_percent}` (each metric a `{min, max, avg, latest}` object) or `{status: "unavailable", reason}`.
 
-**Example response:**
-
-```json
-{
-  "TODO": "Example response to be added."
-}
-```
-
 **Use when:**
 
 - You need the ISE cluster/deployment topology and node inventory
@@ -940,14 +932,6 @@ Set `scan_logs=false` for a quick "are any certs expiring?" check. Keep it true 
   - `coverage_note`: Human-readable "scanned X of Y PSN node(s)" summary
 - `verdict`: `critical` (any expired cert OR any log signal), `warning` (expiring certs only, no signals), or `healthy`
 - `checked_at`: ISO 8601 timestamp of the diagnosis (UTC)
-
-**Example response:**
-
-```json
-{
-  "TODO": "Example response to be added."
-}
-```
 
 **Use when:**
 
