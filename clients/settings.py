@@ -9,9 +9,10 @@ calling ``os.getenv`` directly. The password is held as ``SecretStr`` so it
 is never exposed via ``repr()``, tracebacks, or accidental ``vars()`` dumps.
 """
 
+import os
 from typing import Optional
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_core import PydanticUseDefault
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -52,6 +53,8 @@ class ISESettings(BaseSettings):
     @field_validator(
         "api_port", "api_username", "api_pwd",
         "ise_admin_session_cookie", "log_cache_ttl_s", "log_cache_dir_prefix",
+        "ise_client_cert", "ise_client_key", "ise_client_key_password",
+        "ise_ca_bundle",
         mode="before",
     )
     @classmethod
@@ -97,6 +100,74 @@ class ISESettings(BaseSettings):
     log_cache_dir_prefix: str = Field(
         default="ise-logs-", min_length=1, validation_alias="LOG_CACHE_DIR_PREFIX"
     )
+
+    # --- Certificate-based auth + server verification -----------------
+    # Client certificate PEM path. When both cert and key are set, ISE
+    # clients present this cert (mTLS) and send NO Authorization header:
+    # ISE authenticates the API user from the cert (standalone auth).
+    ise_client_cert: Optional[str] = Field(
+        default=None, validation_alias="ISE_CLIENT_CERT"
+    )
+    ise_client_key: Optional[str] = Field(
+        default=None, validation_alias="ISE_CLIENT_KEY"
+    )
+    # Passphrase for an encrypted private key. SecretStr so it never
+    # leaks via repr/tracebacks. None => key assumed unencrypted.
+    ise_client_key_password: Optional[SecretStr] = Field(
+        default=None, validation_alias="ISE_CLIENT_KEY_PASSWORD"
+    )
+    # Peer certificate verification. Defaults ON (breaking change vs the
+    # old always-disabled posture); set false to disable for testing.
+    ise_verify_server_cert: bool = Field(
+        default=True, validation_alias="ISE_VERIFY_SERVER_CERT"
+    )
+    # Hostname/SAN matching, independent of chain verification so an
+    # operator can verify the chain but skip hostname matching when
+    # connecting to a bare IP whose cert has no IP SAN. Must be False
+    # whenever ise_verify_server_cert is False (stdlib ssl forbids
+    # check_hostname=True with CERT_NONE).
+    ise_verify_hostname: bool = Field(
+        default=True, validation_alias="ISE_VERIFY_HOSTNAME"
+    )
+    # Optional CA/self-signed cert to trust (load_verify_locations).
+    # When unset and verification is on, the system trust store is used.
+    ise_ca_bundle: Optional[str] = Field(
+        default=None, validation_alias="ISE_CA_BUNDLE"
+    )
+
+    @property
+    def client_cert_configured(self) -> bool:
+        """True iff both client cert and key paths are set."""
+        return bool(self.ise_client_cert and self.ise_client_key)
+
+    @model_validator(mode="after")
+    def _validate_cert_and_tls_config(self) -> "ISESettings":
+        # Cert and key must be supplied together.
+        if bool(self.ise_client_cert) != bool(self.ise_client_key):
+            missing = "ISE_CLIENT_KEY" if self.ise_client_cert else "ISE_CLIENT_CERT"
+            raise ValueError(
+                f"{missing} must be set when the other is set: client "
+                "cert and key are required together."
+            )
+        # Hostname check cannot be on while verification is off.
+        if self.ise_verify_hostname and not self.ise_verify_server_cert:
+            raise ValueError(
+                "ISE_VERIFY_HOSTNAME=true requires ISE_VERIFY_SERVER_CERT=true "
+                "(stdlib ssl forbids hostname checking without chain "
+                "verification). Set ISE_VERIFY_HOSTNAME=false to connect to "
+                "a bare IP without an IP SAN."
+            )
+        # Referenced files must exist and be readable, checked at startup.
+        for label, path in (
+            ("ISE_CLIENT_CERT", self.ise_client_cert),
+            ("ISE_CLIENT_KEY", self.ise_client_key),
+            ("ISE_CA_BUNDLE", self.ise_ca_bundle),
+        ):
+            if path and not os.path.isfile(path):
+                raise ValueError(
+                    f"{label} path does not exist or is not a file: {path}"
+                )
+        return self
 
 
 settings = ISESettings()

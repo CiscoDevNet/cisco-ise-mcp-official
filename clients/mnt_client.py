@@ -108,9 +108,9 @@ class MNTClient:
     Settings, ``SecretStr``-backed password). The async HTTP client is
     created during ``setup()`` (call during server startup).
 
-    Security posture: TLS peer verification is intentionally disabled
-    (see ``clients/tls.py``); TLS 1.2+ is enforced. Redirects are not
-    followed.
+    Security posture: TLS peer verification is on by default (configurable
+    via ISE_VERIFY_SERVER_CERT, see ``clients/tls.py``); TLS 1.2+ is enforced.
+    Redirects are not followed.
     """
 
     _instance: Optional["MNTClient"] = None
@@ -184,8 +184,10 @@ class MNTClient:
         present. When absent, the client is built without an auth
         flow; per-request flows that carry an
         ``X-ISE-Authorization`` header inject their own Authorization
-        header per-call and are unaffected. SA-fallback requests in
-        that configuration fail loud (see ``get()``).
+        header per-call, and client-certificate auth authenticates via
+        the shared TLS context -- both are unaffected. Only requests
+        that would need the SA fallback (no header, no client cert)
+        fail loud in that configuration (see ``get()``).
         """
         if self._client is not None:
             logger.debug("MNT client already set up")
@@ -203,11 +205,19 @@ class MNTClient:
             )
         else:
             auth = None
-            logger.info(
-                "MNT client: no service-account credentials in .env -- "
-                "all MNT calls MUST carry "
-                f"'{settings.credential_header_name}'"
-            )
+            if settings.client_cert_configured:
+                logger.info(
+                    "MNT client: no service-account credentials in .env -- "
+                    "MNT calls authenticate with the configured client "
+                    f"certificate (or a forwarded "
+                    f"'{settings.credential_header_name}' when present)"
+                )
+            else:
+                logger.info(
+                    "MNT client: no service-account credentials in .env -- "
+                    "all MNT calls MUST carry "
+                    f"'{settings.credential_header_name}'"
+                )
 
         headers = {"Accept": "application/xml"}
 
@@ -242,16 +252,21 @@ class MNTClient:
         Returns ``(per_call_kwargs, auth_path_label)`` where
         ``per_call_kwargs`` is spread into ``httpx.AsyncClient.get(...)``
         and ``auth_path_label`` is a stable string for logs
-        (``"per_user_credential"`` or ``"service_account"``).
+        (``"per_user_credential"``, ``"client_certificate"``, or
+        ``"service_account"``).
 
-        Selection order matches the original inline logic in ``get()``:
+        Selection order (precedence, highest first):
           1. If the inbound MCP request carried an
              ``X-ISE-Authorization`` header, attach it verbatim plus a
              no-op ``auth=`` flow so httpx's client-level BasicAuth
              cannot overwrite us.
-          2. Else, if ``require_per_user_credential`` is True, refuse.
-          3. Else, if no SA creds are configured, refuse loudly.
-          4. Otherwise, return empty kwargs (client-level BasicAuth
+          2. Else, if a client certificate is configured, send no
+             ``Authorization`` header plus a no-op ``auth=`` flow (so
+             the client-level BasicAuth can't inject SA creds); the
+             cert authenticates the request via the shared TLS context.
+          3. Else, if ``require_per_user_credential`` is True, refuse.
+          4. Else, if no SA creds are configured, refuse loudly.
+          5. Otherwise, return empty kwargs (client-level BasicAuth
              does the work) and label it as SA fallback.
         """
         per_user_credential = get_per_user_credential()
@@ -263,6 +278,12 @@ class MNTClient:
                 },
                 "per_user_credential",
             )
+        # Cert mode: client cert configured -> standalone auth. Send no
+        # Authorization header; _NoOpAuth neutralises the client-level
+        # BasicAuth so it can't inject SA creds. The cert itself (loaded
+        # in the shared TLS context) authenticates the request.
+        if settings.client_cert_configured:
+            return ({"auth": _NoOpAuth()}, "client_certificate")
         if settings.require_per_user_credential:
             raise MissingIseCredentialError(
                 "ISE_REQUIRE_PER_USER_CREDENTIAL=true but no "

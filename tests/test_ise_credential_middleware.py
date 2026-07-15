@@ -121,3 +121,58 @@ class TestIseCredentialMiddleware:
                 await middleware.on_request(mock_context, call_next)
 
         assert get_per_user_credential() is None
+
+    async def _run_no_header_and_capture_log(self, *, client_cert_configured, require_per_user_credential):
+        """Run on_request with no header under a given settings posture and
+        return the logger.info messages emitted."""
+        from utils.ise_credential_middleware import IseCredentialMiddleware
+
+        middleware = IseCredentialMiddleware()
+
+        mock_request = MagicMock()
+        mock_request.headers.get.return_value = None
+        mock_context = MagicMock()
+
+        async def call_next(ctx):
+            return "ok"
+
+        mock_settings = MagicMock()
+        mock_settings.credential_header_name = "X-ISE-Authorization"
+        mock_settings.client_cert_configured = client_cert_configured
+        mock_settings.require_per_user_credential = require_per_user_credential
+
+        with patch("utils.ise_credential_middleware.settings", mock_settings), \
+                patch("utils.ise_credential_middleware.get_http_request", return_value=mock_request), \
+                patch("utils.ise_credential_middleware.logger") as mock_logger:
+            await middleware.on_request(mock_context, call_next)
+
+        # Reconstruct the fully-formatted message from the (fmt, *args) call.
+        assert mock_logger.info.called
+        args, _ = mock_logger.info.call_args
+        return args[0] % tuple(args[1:])
+
+    @pytest.mark.asyncio
+    async def test_no_header_log_reports_client_certificate(self):
+        msg = await self._run_no_header_and_capture_log(
+            client_cert_configured=True, require_per_user_credential=True
+        )
+        # Cert wins over require_per_user_credential; must NOT claim SA
+        # fallback or refusal.
+        assert "client certificate" in msg
+        assert "service-account" not in msg
+        assert "refuse" not in msg
+
+    @pytest.mark.asyncio
+    async def test_no_header_log_reports_refusal(self):
+        msg = await self._run_no_header_and_capture_log(
+            client_cert_configured=False, require_per_user_credential=True
+        )
+        assert "refuse" in msg
+        assert "ISE_REQUIRE_PER_USER_CREDENTIAL=true" in msg
+
+    @pytest.mark.asyncio
+    async def test_no_header_log_reports_service_account(self):
+        msg = await self._run_no_header_and_capture_log(
+            client_cert_configured=False, require_per_user_credential=False
+        )
+        assert "service-account" in msg

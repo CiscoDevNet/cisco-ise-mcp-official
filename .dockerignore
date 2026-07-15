@@ -23,6 +23,13 @@ api_specs/
 api_client_config/
 scripts/
 
+# Client-certificate material — never bake keys/certs into image layers;
+# mount them at runtime instead (see docker-compose.yml volumes).
+certs/
+*.pem
+*.key
+*.crt
+
 # Misc
 *.pyc
 *.pyo

@@ -59,6 +59,12 @@ libs/*.jar
 libs/*.jks
 libs/*.pem
 
+# Client-certificate material (never commit private keys / certs)
+certs/
+*.pem
+*.key
+*.crt
+
 # Lock file can be committed for reproducibility
 # uv.lock
 

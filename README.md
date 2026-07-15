@@ -18,16 +18,6 @@ tools, inspect their schemas, and call them from natural language prompts.
 - **Protocol:** Streamable HTTP
 - **Default URL:** `http://localhost:5000/mcp/`
 
-## Limitations
-
-- **Log fetching depends on a prior UI download.** Log data is retrieved through
-  ISE's web server (the UI download mechanism), not a dedicated log API. A given
-  log file can only be fetched if it has been **downloaded from the ISE UI at
-  least once before**; if that manual download was never performed, the log fetch
-  will not succeed. This does **not** break the tool — the affected tool still
-  returns its other results gracefully, and only the log-derived portion of the
-  output is unavailable.
-
 ## Pre-requisites
 
 - Python 3.12
@@ -47,6 +37,9 @@ cd cisco-ise-mcp-official
 cp .env.example .env
 # Edit .env with your ISE credentials
 ```
+
+See [Configuration](#configuration) for every setting, including the
+authentication approaches and server-certificate verification.
 
 ### 2. Install Dependencies
 
@@ -79,17 +72,27 @@ The server will be available at `http://localhost:5000`
 |----------|-------------|---------|----------|
 | `ISE_IP` | ISE PAN host/IP | — | Yes |
 | `API_PORT` | ISE PAN port | `443` | No |
-| `API_USERNAME` | ISE service-account username (fallback auth) | — | See below |
-| `API_PWD` | ISE service-account password (fallback auth) | — | See below |
+| `API_USERNAME` | ISE service-account username | — | See below |
+| `API_PWD` | ISE service-account password | — | See below |
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
 | `ISE_CREDENTIAL_HEADER_NAME` | Inbound header carrying the per-user ISE credential | `X-ISE-Authorization` | No |
-| `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of falling back to the service account | `false` | No |
+| `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of using the service account | `false` | No |
+| `ISE_CLIENT_CERT` | Path to the client certificate PEM (cert-based auth; see below) | — | No |
+| `ISE_CLIENT_KEY` | Path to the client private-key PEM (required with `ISE_CLIENT_CERT`) | — | No |
+| `ISE_CLIENT_KEY_PASSWORD` | Passphrase for an encrypted client key | — | No |
+| `ISE_VERIFY_SERVER_CERT` | Verify the ISE server certificate | `true` | No |
+| `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
+| `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
 
-`API_USERNAME` / `API_PWD` are the **fallback** service-account credentials used
-when a request does not carry the per-user `X-ISE-Authorization` header. They are
-required unless every client sends that header (see [Authentication](#authentication));
-with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` they can be left empty.
+`API_USERNAME` / `API_PWD` are the service-account credentials used when a request
+does not carry the per-user `X-ISE-Authorization` header or a client certificate.
+They are required unless every client sends that header (see
+[Authentication](#authentication)); with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` or a
+client certificate configured, they can be left empty.
+
+See [Authentication](#authentication) for how these credentials, the client
+certificate, and server-certificate verification fit together.
 
 ## API Endpoints
 
@@ -180,18 +183,53 @@ add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in the project):
 
 ### Authentication
 
-The server accepts an optional per-request `X-ISE-Authorization` header carrying a
-pre-built `Basic <base64(username:password)>` ISE credential. When a client does not
-send it, the server falls back to the service-account credentials from `.env`
-(`API_USERNAME` / `API_PWD`).
+The server can authenticate to ISE three ways. For each request it picks the
+first that applies, in this order:
 
-- The header name is configurable via `ISE_CREDENTIAL_HEADER_NAME`.
-- Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
-  header instead of falling back to the service account.
+1. **Per-user credential header** — an inbound `X-ISE-Authorization` header
+   carrying a pre-built `Basic <base64(username:password)>` credential is used
+   verbatim. The header name is configurable via `ISE_CREDENTIAL_HEADER_NAME`.
+2. **Client certificate** — when `ISE_CLIENT_CERT` and `ISE_CLIENT_KEY` are set
+   (and no per-user header is present), the certificate is presented on the TLS
+   connection and **no `Authorization` header is sent** — ISE identifies the API
+   user from the certificate. Cert and key must be supplied together; add
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. This is the
+   programmatic equivalent of:
+
+   ```bash
+   curl -X GET https://<ISE_IP>/ers/config/op/systemconfig/iseversion \
+     --cert client.pem --key client.key -H "Accept: application/json"
+   ```
+3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
+   are used when neither of the above applies.
+
+Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
+per-user header instead of using the service account (a configured client
+certificate still satisfies the request).
+
+**Server certificate verification** is **enabled by default**. To connect to ISE
+nodes presenting self-signed or internal-CA certificates, configure trust via
+`ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, and `ISE_CA_BUNDLE` (see the
+[Configuration](#configuration) table).
 
 ## Available Tools
 
 See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
+
+## Limitations
+
+- **Log fetching depends on a prior UI download.** Log data is retrieved through
+  ISE's web server (the UI download mechanism), not a dedicated log API. A given
+  log file can only be fetched if it has been **downloaded from the ISE UI at
+  least once before**; if that manual download was never performed, the log fetch
+  will not succeed. This does **not** break the tool — the affected tool still
+  returns its other results gracefully, and only the log-derived portion of the
+  output is unavailable.
+- **Log fetching may work only with username/password authentication.** Because
+  logs go through ISE's web server rather than the API, log fetching is expected
+  to work with the service-account (`API_USERNAME` / `API_PWD`) or per-user
+  `X-ISE-Authorization` credential flows, but not with client-certificate
+  authentication. Other tool results are unaffected under cert auth.
 
 ## Development
 
