@@ -184,8 +184,10 @@ class MNTClient:
         present. When absent, the client is built without an auth
         flow; per-request flows that carry an
         ``X-ISE-Authorization`` header inject their own Authorization
-        header per-call and are unaffected. SA-fallback requests in
-        that configuration fail loud (see ``get()``).
+        header per-call, and client-certificate auth authenticates via
+        the shared TLS context -- both are unaffected. Only requests
+        that would need the SA fallback (no header, no client cert)
+        fail loud in that configuration (see ``get()``).
         """
         if self._client is not None:
             logger.debug("MNT client already set up")
@@ -203,11 +205,19 @@ class MNTClient:
             )
         else:
             auth = None
-            logger.info(
-                "MNT client: no service-account credentials in .env -- "
-                "all MNT calls MUST carry "
-                f"'{settings.credential_header_name}'"
-            )
+            if settings.client_cert_configured:
+                logger.info(
+                    "MNT client: no service-account credentials in .env -- "
+                    "MNT calls authenticate with the configured client "
+                    f"certificate (or a forwarded "
+                    f"'{settings.credential_header_name}' when present)"
+                )
+            else:
+                logger.info(
+                    "MNT client: no service-account credentials in .env -- "
+                    "all MNT calls MUST carry "
+                    f"'{settings.credential_header_name}'"
+                )
 
         headers = {"Accept": "application/xml"}
 

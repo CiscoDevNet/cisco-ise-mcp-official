@@ -19,8 +19,13 @@ def _base(**over):
     Fields use ``validation_alias`` and the model does NOT set
     ``populate_by_name``, so kwargs MUST be keyed by the env-var alias
     (e.g. ``ISE_IP``), not the Python field name.
+
+    ``_env_file=None`` disables reading the on-disk ``.env`` so these
+    tests are isolated from a developer's real configuration (otherwise
+    a ``.env`` that sets, e.g., ISE_CLIENT_CERT would leak into the
+    "no cert configured" cases and break them).
     """
-    kwargs = {"ISE_IP": "10.0.0.1"}
+    kwargs = {"ISE_IP": "10.0.0.1", "_env_file": None}
     kwargs.update(over)
     return kwargs
 
