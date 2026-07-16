@@ -1,3 +1,7 @@
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ Contains all the data models used in inputs/outputs """
 
 from .authentication_rule_list_response_entity import AuthenticationRuleListResponseEntity

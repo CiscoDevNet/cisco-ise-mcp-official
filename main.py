@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Helper script to run the ise-mcp-server unit tests with optional coverage."""
 
 from __future__ import annotations

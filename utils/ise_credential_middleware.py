@@ -1,4 +1,6 @@
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
 """FastMCP middleware that lifts the per-request ISE credential
 header into a ContextVar visible to downstream tool handlers."""

@@ -1,4 +1,6 @@
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for the policy-tool input validators in utils/input_validators.py."""
 

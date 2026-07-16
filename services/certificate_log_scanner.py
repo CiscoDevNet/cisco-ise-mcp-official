@@ -1,4 +1,6 @@
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
 """Scan a cleaned ``ise-psc.log`` for certificate/TLS error signals.
 
