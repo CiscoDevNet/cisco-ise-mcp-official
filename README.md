@@ -69,8 +69,6 @@ The server will be available at `http://localhost:5000`
 | `API_PORT` | ISE PAN port | `443` | No |
 | `API_USERNAME` | ISE service-account username | — | See below |
 | `API_PWD` | ISE service-account password | — | See below |
-| `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
-| `PORT` | Port the MCP server listens on | `5000` | No |
 | `ISE_CREDENTIAL_HEADER_NAME` | Inbound header carrying the per-user ISE credential | `X-ISE-Authorization` | No |
 | `ISE_REQUIRE_PER_USER_CREDENTIAL` | Reject requests missing the credential header instead of using the service account | `false` | No |
 | `ISE_CLIENT_CERT` | Path to the client certificate PEM (cert-based auth; see below) | — | No |
@@ -79,15 +77,16 @@ The server will be available at `http://localhost:5000`
 | `ISE_VERIFY_SERVER_CERT` | Verify the ISE server certificate | `true` | No |
 | `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
 | `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
+| `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
+| `PORT` | Port the MCP server listens on | `5000` | No |
 
-`API_USERNAME` / `API_PWD` are the service-account credentials used when a request
-does not carry the per-user `X-ISE-Authorization` header or a client certificate.
-They are required unless every client sends that header (see
-[Authentication](#authentication)); with `ISE_REQUIRE_PER_USER_CREDENTIAL=true` or a
-client certificate configured, they can be left empty.
-
-See [Authentication](#authentication) for how these credentials, the client
-certificate, and server-certificate verification fit together.
+The server authenticates to ISE with one of three credential types: the
+per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
+`ISE_CLIENT_KEY`), or the `API_USERNAME` / `API_PWD` service account. The service
+account is the fallback and is required unless a client certificate is configured
+or `ISE_REQUIRE_PER_USER_CREDENTIAL=true` forces the header — in either of those
+cases it can be left empty. See [Authentication](#authentication) for how these
+credentials and server-certificate verification fit together.
 
 ## API Endpoints
 
@@ -188,7 +187,9 @@ first that applies, in this order:
    (and no per-user header is present), the certificate is presented on the TLS
    connection and **no `Authorization` header is sent** — ISE identifies the API
    user from the certificate. Cert and key must be supplied together; add
-   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted.
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. For step-by-step setup
+   on the ISE side, see
+   [How to configure certificate-based authentication for Cisco ISE](https://community.cisco.com/t5/security-blogs/how-to-configure-certificate-based-authentication-for-cisco-ise/bc-p/5372752).
 3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
    are used when neither of the above applies.
 
@@ -200,6 +201,117 @@ certificate still satisfies the request).
 nodes presenting self-signed or internal-CA certificates, configure trust via
 `ISE_VERIFY_SERVER_CERT`, `ISE_VERIFY_HOSTNAME`, and `ISE_CA_BUNDLE` (see the
 [Configuration](#configuration) table).
+
+## Security Best Practices
+
+This server talks to ISE's REST APIs — the ERS APIs and the Open APIs, both over
+HTTPS on port 443. Treat the credentials and certificates it uses as production
+secrets: source them in a secure manner (environment variables, a secrets
+manager, or a key management service — never hard-coded or committed), and apply
+the practices below.
+
+### Least-privilege API accounts
+
+API access requires a user (internal or from an external Active Directory group)
+mapped to one of the ERS roles. Grant the **narrowest** role that works:
+
+- **ERS Operator** — read-only (`GET` only). Prefer this for the service account,
+  since the tools here are primarily read/investigation oriented.
+- **ERS Admin** — full CRUD (`GET`, `POST`, `PUT`, `DELETE`). Use only if a
+  workflow genuinely needs writes.
+- **Super Admin** — can access all API services; avoid using it for automation.
+
+### Prefer certificate-based authentication
+
+Certificate-based authentication for the ISE APIs is supported from **Cisco ISE
+Release 3.3 onwards** (see the
+[ISE 3.3 Release Notes](https://www.cisco.com/c/en/us/td/docs/security/ise/3-3/release_notes/b_ise_33_RN.html#concept_y2r_qph_gxb)).
+
+- **Rotate certificates regularly** on a defined schedule, issue them with
+  **shorter validity periods**, and **monitor expiration** with alerts.
+- Use **strong keys** — minimum **2048-bit RSA** or **256-bit ECC**.
+- Store the private key **encrypted at rest** and supply its passphrase
+  via `ISE_CLIENT_KEY_PASSWORD`.
+- For high-security production environments, manage certificates and keys with a
+  dedicated **Key Management Service** (HashiCorp Vault, AWS KMS, etc.).
+- Never commit `.env`, certificates, or key material to version control.
+
+### Storing secrets in the OS keystore
+
+Below are ways to keep a secret value — typically either `API_PWD` or
+`ISE_CLIENT_KEY_PASSWORD` — in your OS's encrypted store instead of a plaintext
+`.env`, then load it into an environment variable only when you launch the server.
+
+The examples store and read a single secret named `ise-api-pwd` and map it to
+`API_PWD`. The same process can be followed for other secrets, mapping each
+stored secret to its corresponding environment variable.
+
+#### macOS (Keychain)
+
+Store the secret once (you'll be prompted for the value with `-w`):
+
+```bash
+security add-generic-password -a "$USER" -s ise-api-pwd -w
+```
+
+Then read it into the environment when running the server:
+
+```bash
+export API_PWD="$(security find-generic-password -a "$USER" -s ise-api-pwd -w)"
+uv run server.py
+```
+
+To update the stored value, add `-U` to the `add-generic-password` command. To
+remove it: `security delete-generic-password -a "$USER" -s ise-api-pwd`.
+
+#### Linux (libsecret / `secret-tool`)
+
+`secret-tool` ships with libsecret (`sudo apt install libsecret-tools` on
+Debian/Ubuntu) and talks to your desktop keyring (GNOME Keyring, KWallet).
+
+Store the secret once (you'll be prompted to type it):
+
+```bash
+secret-tool store --label="ISE API password" service ise account api-pwd
+```
+
+Then read it into the environment when running the server:
+
+```bash
+export API_PWD="$(secret-tool lookup service ise account api-pwd)"
+uv run server.py
+```
+
+To remove it: `secret-tool clear service ise account api-pwd`.
+
+#### Windows (PowerShell + SecretManagement)
+
+Use the [SecretManagement](https://learn.microsoft.com/en-us/powershell/utility-modules/secretmanagement/overview)
+module with its local vault. Install once:
+
+```powershell
+Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
+Register-SecretVault -Name LocalStore -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault
+```
+
+Store the secret once (you'll be prompted securely):
+
+```powershell
+Set-Secret -Name ise-api-pwd -Secret (Read-Host -AsSecureString "ISE API password")
+```
+
+Then read it into the environment when running the server:
+
+```powershell
+$env:API_PWD = Get-Secret -Name ise-api-pwd -AsPlainText
+uv run server.py
+```
+
+To remove it: `Remove-Secret -Name ise-api-pwd -Vault LocalStore`.
+
+> These commands set the environment variable only for the current shell session,
+> so the secret is never persisted to `.env`. Leave the corresponding key out of
+> your `.env` file so the value from the environment is used.
 
 ## Available Tools
 
