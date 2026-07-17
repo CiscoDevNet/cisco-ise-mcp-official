@@ -1,6 +1,8 @@
-# tests/test_certificate_diagnostics_resolver.py
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
+# tests/test_certificate_diagnostics_resolver.py
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path

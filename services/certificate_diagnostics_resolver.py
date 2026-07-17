@@ -1,6 +1,8 @@
-# services/certificate_diagnostics_resolver.py
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
+# services/certificate_diagnostics_resolver.py
 """Scan ise-psc.log on PSN nodes for certificate/TLS error signals.
 
 Discovers PSN nodes from the deployment node list, fetches each node's

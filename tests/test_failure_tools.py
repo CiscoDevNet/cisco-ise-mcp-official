@@ -1,4 +1,6 @@
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
 """Tests for AAA failure investigation: xml_parser (authStatus, failureReasons),
 failure_models, failure_context_resolver, failure_tool_handler."""
