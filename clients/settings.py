@@ -57,6 +57,8 @@ class ISESettings(BaseSettings):
         "ise_admin_session_cookie", "log_cache_ttl_s", "log_cache_dir_prefix",
         "ise_client_cert", "ise_client_key", "ise_client_key_password",
         "ise_ca_bundle",
+        "authlist_max_concurrency", "authlist_min_interval_s",
+        "authlist_backoff_base_s", "authlist_backoff_max_s",
         mode="before",
     )
     @classmethod
@@ -69,6 +71,29 @@ class ISESettings(BaseSettings):
     read_timeout_s: float = Field(default=30.0, gt=0)
     write_timeout_s: float = Field(default=10.0, gt=0)
     pool_timeout_s: float = Field(default=5.0, gt=0)
+
+    # --- AuthList concurrency / backpressure gate --------------------
+    # Max full-AuthList downloads allowed to run at once. Default 1
+    # serialises the heavy session tools so concurrent calls cannot pile
+    # up in memory (the Run-1 crash). Raise only with headroom.
+    authlist_max_concurrency: int = Field(
+        default=1, ge=1, le=16, validation_alias="ISE_AUTHLIST_MAX_CONCURRENCY"
+    )
+    # Minimum seconds between the START of consecutive AuthList downloads.
+    # Proactively spaces large MnT downloads (SST's manual-delay finding).
+    # Default 0.0 = off; a call arriving sooner rejects fast with ISE_BUSY.
+    authlist_min_interval_s: float = Field(
+        default=0.0, ge=0.0, validation_alias="ISE_AUTHLIST_MIN_INTERVAL_S"
+    )
+    # Adaptive breaker base backoff (seconds). The open window doubles per
+    # consecutive MnT distress signal, starting from this value.
+    authlist_backoff_base_s: float = Field(
+        default=5.0, gt=0.0, validation_alias="ISE_AUTHLIST_BACKOFF_BASE_S"
+    )
+    # Adaptive breaker max backoff (seconds); caps the doubling window.
+    authlist_backoff_max_s: float = Field(
+        default=300.0, gt=0.0, validation_alias="ISE_AUTHLIST_BACKOFF_MAX_S"
+    )
 
     # Inbound MCP header carrying the end-user's pre-built
     # `Basic <b64(user:pass)>` credential.
