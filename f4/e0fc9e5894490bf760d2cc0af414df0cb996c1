@@ -1,0 +1,26 @@
+clients/settings.py
+  s_f31f651af777a6::t_07ef3dd3fde068 78-81
+tests/test_auth_list_gate.py
+  s_f31f651af777a6::t_9bfda9227d6f3e 109-110,115-116
+tests/test_settings_log_fields.py
+  s_f31f651af777a6::t_4240c5188eb2c8 64-65,72-73
+tests/test_session_tools.py
+  s_f31f651af777a6::t_3bac1e652f35fa 277-290
+  s_f31f651af777a6::t_77bd03c9cee02e 276,306-367
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f4e0fc9e5894490bf760d2cc0af414df0cb996c1",
+  "prompts": {},
+  "sessions": {
+    "s_f31f651af777a6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c0b421bb-98c5-4331-aee9-588f1ccb8559",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
