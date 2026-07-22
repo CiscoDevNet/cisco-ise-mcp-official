@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import defusedxml.ElementTree as ET
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable, Tuple
 from logger import logger
 
 
@@ -74,6 +74,48 @@ def parse_active_session_xml(xml_string: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Unexpected error parsing active session XML", error=str(e))
         raise
+
+
+def iter_filter_active_sessions(
+    source,
+    predicate: Callable[[Dict[str, Any]], bool],
+    retention_cap: int,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Stream-parse an ActiveList XML source, filtering as we go.
+
+    Uses ``ET.iterparse`` + ``root.clear()`` (the same idiom as
+    ``parse_msg_catalog``) so peak memory is proportional to a single
+    ``<activeSession>`` subtree plus the retained sample -- NOT the whole
+    document. Applies *predicate* to each session dict; every match
+    increments the returned total, but only the first *retention_cap*
+    matches are kept in the returned list.
+
+    Args:
+        source: Anything ``ET.iterparse`` accepts (file object or path).
+        predicate: Called with one session dict; True keeps the session.
+        retention_cap: Max sessions to retain in the returned list (>= 0).
+
+    Returns:
+        (retained_sessions, total_matched).
+    """
+    total_matched = 0
+    retained: List[Dict[str, Any]] = []
+    context = ET.iterparse(source, events=("end",))
+    _, root = next(context)
+    for _, elem in context:
+        if elem.tag != "activeSession":
+            continue
+        session_data: Dict[str, Any] = {}
+        for child in elem:
+            value = child.text if child.text and child.text.strip() else None
+            session_data[child.tag] = value
+        if predicate(session_data):
+            total_matched += 1
+            if len(retained) < retention_cap:
+                retained.append(session_data)
+        root.clear()
+    logger.debug("Streamed active sessions", total_matched=total_matched, retained=len(retained))
+    return retained, total_matched
 
 
 # Keys to extract from other_attr_string (":!:" delimited Key=Value pairs)

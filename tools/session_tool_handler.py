@@ -93,6 +93,37 @@ class SessionToolHandler:
         return active_session_list.sessions
 
     @staticmethod
+    def _build_session_predicate(
+        username: Optional[str] = None,
+        calling_station_id: Optional[str] = None,
+        nas_ip_address: Optional[str] = None,
+        framed_ip_address: Optional[str] = None,
+        server: Optional[str] = None,
+    ):
+        """Build a per-session predicate mirroring _filter_sessions.
+
+        Filter values must be pre-validated and normalized by the caller
+        (calling_station_id already normalized via validate_mac_address).
+        The session's own MAC is normalized here before comparison.
+        """
+        def predicate(s: dict) -> bool:
+            if username and s.get("user_name") != username:
+                return False
+            if calling_station_id:
+                raw = s.get("calling_station_id")
+                if not raw or normalize_mac_address(raw) != calling_station_id:
+                    return False
+            if nas_ip_address and s.get("nas_ip_address") != nas_ip_address:
+                return False
+            if framed_ip_address and s.get("framed_ip_address") != framed_ip_address:
+                return False
+            if server and s.get("server") != server:
+                return False
+            return True
+
+        return predicate
+
+    @staticmethod
     def _filter_sessions(
         sessions: List[ActiveSession],
         username: Optional[str] = None,

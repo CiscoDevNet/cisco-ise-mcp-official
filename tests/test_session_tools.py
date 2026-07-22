@@ -4,6 +4,7 @@
 
 """Tests for session-related tools: xml_parser (sessionParameters), session_models, session_tool_handler."""
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -1310,3 +1311,108 @@ def test_enriched_limit_rejects_above_10():
 
     with pytest.raises(McpToolError):
         validate_limit(11, max_limit=10)
+
+
+class TestIterFilterActiveSessions:
+    """Streaming, memory-bounded AuthList parse + filter."""
+
+    XML = """<?xml version="1.0"?>
+    <activeList noOfActiveSession="3">
+        <activeSession>
+            <user_name>alice</user_name>
+            <calling_station_id>AA:BB:CC:DD:EE:01</calling_station_id>
+            <nas_ip_address>10.0.0.1</nas_ip_address>
+            <server>ise-1</server>
+        </activeSession>
+        <activeSession>
+            <user_name>bob</user_name>
+            <calling_station_id>AA:BB:CC:DD:EE:02</calling_station_id>
+            <nas_ip_address>10.0.0.1</nas_ip_address>
+            <server>ise-2</server>
+        </activeSession>
+        <activeSession>
+            <user_name>alice</user_name>
+            <calling_station_id>AA:BB:CC:DD:EE:03</calling_station_id>
+            <nas_ip_address>10.0.0.2</nas_ip_address>
+            <server>ise-1</server>
+        </activeSession>
+    </activeList>"""
+
+    def _src(self):
+        return io.BytesIO(self.XML.encode("utf-8"))
+
+    def test_no_filter_retains_up_to_cap_and_counts_all(self):
+        from utils.xml_parser import iter_filter_active_sessions
+
+        retained, total = iter_filter_active_sessions(self._src(), lambda s: True, retention_cap=2)
+        assert total == 3
+        assert len(retained) == 2
+        assert retained[0]["user_name"] == "alice"
+
+    def test_predicate_filters_and_counts_matches(self):
+        from utils.xml_parser import iter_filter_active_sessions
+
+        pred = lambda s: s.get("user_name") == "alice"
+        retained, total = iter_filter_active_sessions(self._src(), pred, retention_cap=10)
+        assert total == 2
+        assert len(retained) == 2
+        assert all(s["user_name"] == "alice" for s in retained)
+
+    def test_cap_zero_counts_but_retains_nothing(self):
+        from utils.xml_parser import iter_filter_active_sessions
+
+        retained, total = iter_filter_active_sessions(self._src(), lambda s: True, retention_cap=0)
+        assert total == 3
+        assert retained == []
+
+    def test_empty_list(self):
+        from utils.xml_parser import iter_filter_active_sessions
+
+        src = io.BytesIO(b'<?xml version="1.0"?><activeList noOfActiveSession="0"></activeList>')
+        retained, total = iter_filter_active_sessions(src, lambda s: True, retention_cap=5)
+        assert total == 0
+        assert retained == []
+
+    def test_empty_child_text_becomes_none(self):
+        from utils.xml_parser import iter_filter_active_sessions
+
+        src = io.BytesIO(
+            b'<?xml version="1.0"?><activeList noOfActiveSession="1">'
+            b"<activeSession><user_name>x</user_name><framed_ipv6_address/></activeSession>"
+            b"</activeList>"
+        )
+        retained, total = iter_filter_active_sessions(src, lambda s: True, retention_cap=5)
+        assert total == 1
+        assert retained[0]["user_name"] == "x"
+        assert retained[0]["framed_ipv6_address"] is None
+
+
+class TestBuildSessionPredicate:
+    """Parity between the streaming predicate and legacy _filter_sessions."""
+
+    def _handler(self):
+        from unittest.mock import AsyncMock
+        from tools.session_tool_handler import SessionToolHandler
+        return SessionToolHandler(AsyncMock())
+
+    def test_no_filters_matches_all(self):
+        pred = self._handler()._build_session_predicate(None, None, None, None, None)
+        assert pred({"user_name": "anyone"}) is True
+
+    def test_username_exact_match(self):
+        pred = self._handler()._build_session_predicate("alice", None, None, None, None)
+        assert pred({"user_name": "alice"}) is True
+        assert pred({"user_name": "alicia"}) is False
+        assert pred({"user_name": None}) is False
+
+    def test_mac_normalized_match(self):
+        # Predicate receives an already-normalized filter value; session MAC
+        # comes raw from XML and must be normalized before comparison.
+        pred = self._handler()._build_session_predicate(None, "AA:BB:CC:DD:EE:01", None, None, None)
+        assert pred({"calling_station_id": "aa-bb-cc-dd-ee-01"}) is True
+        assert pred({"calling_station_id": "AA:BB:CC:DD:EE:99"}) is False
+
+    def test_multiple_filters_are_anded(self):
+        pred = self._handler()._build_session_predicate("alice", None, "10.0.0.2", None, "ise-1")
+        assert pred({"user_name": "alice", "nas_ip_address": "10.0.0.2", "server": "ise-1"}) is True
+        assert pred({"user_name": "alice", "nas_ip_address": "10.0.0.1", "server": "ise-1"}) is False
