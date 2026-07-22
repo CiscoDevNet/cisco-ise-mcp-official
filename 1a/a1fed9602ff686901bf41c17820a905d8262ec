@@ -1,0 +1,19 @@
+README.md
+  s_21bb1c3f74e355::t_957f74d9006401 416
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "1aa1fed9602ff686901bf41c17820a905d8262ec",
+  "prompts": {},
+  "sessions": {
+    "s_21bb1c3f74e355": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5e98b26-1fea-4846-a2b7-24fc5ac10361",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
