@@ -103,8 +103,13 @@ class SessionToolHandler:
                     async for chunk in response.aiter_bytes():
                         buf.write(chunk)
                     buf.seek(0)
-                    retained, total_matched = iter_filter_active_sessions(
-                        buf, predicate, retention_cap
+                    # The iterparse walk is synchronous and CPU-bound (and may
+                    # read from a spilled-to-disk temp file). Run it off the
+                    # event loop so a large parse cannot stall unrelated calls
+                    # -- essential once ISE_AUTHLIST_MAX_CONCURRENCY > 1, where
+                    # multiple parses would otherwise serialize on the loop.
+                    retained, total_matched = await asyncio.to_thread(
+                        iter_filter_active_sessions, buf, predicate, retention_cap
                     )
         sessions = [ActiveSession(**d) for d in retained]
         logger.info("Streamed authenticated sessions", total_matched=total_matched, retained=len(sessions))
