@@ -413,6 +413,6 @@ Then regenerate all enabled clients by running the script:
 
 ## License
 
-Licensed under the Apache License, Version 2.0 (Apache 2.0).
+Licensed under Apache 2.0.
 
 See the [LICENSE](/LICENSE) file for details.
