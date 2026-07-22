@@ -143,18 +143,27 @@ class AuthListGate:
     @asynccontextmanager
     async def guard(self):
         await self._admit()
+        recorded = False
         try:
             yield
         except (httpx.TimeoutException, httpx.ConnectError):
             await self._record_failure()
+            recorded = True
             raise
         except httpx.HTTPStatusError as e:
             if e.response.status_code in _DISTRESS_STATUSES:
                 await self._record_failure()
+                recorded = True
             raise
         else:
             await self._record_success()
+            recorded = True
         finally:
+            # If we exited without recording (non-distress exception during probe),
+            # clear the probe reservation so the breaker doesn't stay locked.
+            if not recorded:
+                async with self._lock:
+                    self._probing = False
             self._sem.release()
 
 

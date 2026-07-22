@@ -106,10 +106,16 @@ async def test_breaker_window_doubles_and_caps():
     await fail()                 # window = 5
     clock.advance(5.0)           # window elapsed -> half-open probe allowed
     await fail()                 # probe failed -> window = min(10, 8) = 8
-    clock.advance(7.9)
+    # t = 1010, open_until = 1010 + 8 = 1018
+    clock.advance(7.9)           # t = 1017.9, still within window
     with pytest.raises(McpToolError):
         async with gate.guard():
             pass                 # still within 8s window
+    # Now advance just past the 8s cap to verify probe is admitted.
+    # An uncapped 10s window would reject until t=1020, but the cap ends at 1018.
+    clock.advance(0.2)           # t = 1018.1, past the capped window
+    async with gate.guard():
+        pass                     # half-open probe admitted (cap effective)
 
 
 @pytest.mark.asyncio
@@ -137,3 +143,24 @@ async def test_non_distress_exception_does_not_open_breaker():
     # Breaker stayed closed -> next call proceeds.
     async with gate.guard():
         pass
+
+
+@pytest.mark.asyncio
+async def test_non_distress_exception_during_probe_does_not_lock_gate():
+    """A non-distress failure during a half-open probe must not permanently lock the gate."""
+    clock = FakeClock()
+    gate = _gate(base=5.0, clock=clock)
+    # Open the breaker with a distress failure.
+    resp = httpx.Response(502, request=httpx.Request("GET", "https://x/y"))
+    with pytest.raises(httpx.HTTPStatusError):
+        async with gate.guard():
+            raise httpx.HTTPStatusError("bad gateway", request=resp.request, response=resp)
+    # Advance past the window so the next call is admitted as a half-open probe.
+    clock.advance(5.0)
+    # The probe raises a non-distress exception (e.g. ValueError).
+    with pytest.raises(ValueError):
+        async with gate.guard():
+            raise ValueError("non-distress parse error during probe")
+    # The gate must NOT be permanently locked. The next call should succeed.
+    async with gate.guard():
+        pass  # must be admitted, not reject with ISE_BUSY
