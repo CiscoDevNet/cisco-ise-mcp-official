@@ -1,0 +1,29 @@
+pyproject.toml
+  s_21bb1c3f74e355::t_f23e80aa39d188 4
+README.md
+  s_21bb1c3f74e355::t_32fe498fb943f1 416-417
+  s_21bb1c3f74e355::t_b6e3a9483b1869 418
+scripts/generate_api_clients.sh
+  s_21bb1c3f74e355::t_b7e9bbf2e33a2f 2-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "35414834e77460dd94955e77836cb8eaab9d6bdd",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_21bb1c3f74e355": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5e98b26-1fea-4846-a2b7-24fc5ac10361",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
