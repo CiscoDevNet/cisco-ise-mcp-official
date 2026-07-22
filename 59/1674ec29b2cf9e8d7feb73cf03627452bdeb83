@@ -1,0 +1,27 @@
+README.md
+  s_f31f651af777a6::t_e73c43ce62ec0a 316-332
+MCP_TOOLS_CATALOG.md
+  s_f31f651af777a6::t_c75a0f97c6744f 173-174
+  s_f31f651af777a6::t_10b6da17bc08b0 284-285
+  s_f31f651af777a6::t_00d24264cf7d78 28-29
+  s_f31f651af777a6::t_651d7acdb121e9 452-453
+  s_f31f651af777a6::t_41eff65300847d 22-23
+.env.example
+  s_f31f651af777a6::t_465af7012f13eb 27-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "591674ec29b2cf9e8d7feb73cf03627452bdeb83",
+  "prompts": {},
+  "sessions": {
+    "s_f31f651af777a6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c0b421bb-98c5-4331-aee9-588f1ccb8559",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
