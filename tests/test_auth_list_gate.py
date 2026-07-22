@@ -106,14 +106,14 @@ async def test_breaker_window_doubles_and_caps():
     await fail()                 # window = 5
     clock.advance(5.0)           # window elapsed -> half-open probe allowed
     await fail()                 # probe failed -> window = min(10, 8) = 8
-    # t = 1010, open_until = 1010 + 8 = 1018
-    clock.advance(7.9)           # t = 1017.9, still within window
+    # t = 1005, open_until = 1005 + 8 = 1013
+    clock.advance(7.9)           # t = 1012.9, still within window
     with pytest.raises(McpToolError):
         async with gate.guard():
             pass                 # still within 8s window
     # Now advance just past the 8s cap to verify probe is admitted.
-    # An uncapped 10s window would reject until t=1020, but the cap ends at 1018.
-    clock.advance(0.2)           # t = 1018.1, past the capped window
+    # An uncapped 10s window would reject until t=1015, but the cap ends at 1013.
+    clock.advance(0.2)           # t = 1013.1, past the capped window
     async with gate.guard():
         pass                     # half-open probe admitted (cap effective)
 

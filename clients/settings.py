@@ -75,7 +75,10 @@ class ISESettings(BaseSettings):
     # --- AuthList concurrency / backpressure gate --------------------
     # Max full-AuthList downloads allowed to run at once. Default 1
     # serialises the heavy session tools so concurrent calls cannot pile
-    # up in memory (the Run-1 crash). Raise only with headroom.
+    # up in memory (the Run-1 crash). The CPU-bound parse runs off the
+    # event loop (asyncio.to_thread), so raising this overlaps both the
+    # downloads and their parses; raise only with MnT-node headroom, since
+    # each concurrent call is real work on the ISE MnT node.
     authlist_max_concurrency: int = Field(
         default=1, ge=1, le=16, validation_alias="ISE_AUTHLIST_MAX_CONCURRENCY"
     )

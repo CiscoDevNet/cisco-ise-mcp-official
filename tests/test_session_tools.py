@@ -274,6 +274,21 @@ class TestFetchAuthListSessions:
         assert self._last_endpoint.endswith("/null")
 
     @pytest.mark.asyncio
+    async def test_endpoint_encodes_start_time_from_now_minus_minutes(self):
+        # The start time is url-quoted with safe=":", so the space between
+        # date and time becomes %20 while the H:M:S colons are preserved.
+        import re
+
+        handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
+        await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
+        # e.g. "Session/AuthList/2026-06-04%2011:30:00/null"
+        assert re.fullmatch(
+            r"Session/AuthList/\d{4}-\d{2}-\d{2}%20\d{2}:\d{2}:\d{2}/null",
+            self._last_endpoint,
+        ), self._last_endpoint
+        assert " " not in self._last_endpoint  # no raw (unencoded) space
+
+    @pytest.mark.asyncio
     async def test_invalid_minutes_raises_before_io(self):
         from fastmcp.exceptions import ToolError as McpToolError
         handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
@@ -286,6 +301,68 @@ class TestFetchAuthListSessions:
         sessions, total = await handler._fetch_auth_list_sessions(filters={}, retention_cap=1, minutes=60)
         assert total == 2
         assert len(sessions) == 1
+
+
+class TestFetchAuthListGateIntegration:
+    """A streamed MnT distress status must open the REAL gate's breaker.
+
+    Unlike TestFetchAuthListSessions (which injects a pass-through gate),
+    this wires a real AuthListGate so the distress signal from get_stream's
+    raise_for_status propagates through guard() and records a failure --
+    verifying the handler->gate->breaker seam end to end.
+    """
+
+    def _make_handler(self, status_code):
+        import contextlib
+        from unittest.mock import AsyncMock
+        import httpx
+        from clients.auth_list_gate import AuthListGate
+        from tools.session_tool_handler import SessionToolHandler
+
+        request = httpx.Request("GET", "https://ise/admin/API/mnt/Session/AuthList/x/null")
+
+        @contextlib.asynccontextmanager
+        async def fake_get_stream(endpoint):
+            resp = httpx.Response(status_code, request=request)
+            # get_stream calls raise_for_status() before yielding; mirror that
+            # so a distress status raises inside the gate's guard() body.
+            resp.raise_for_status()
+            yield resp  # unreachable for a distress status
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_get_stream
+
+        # Real gate, deterministic clock/jitter, breaker window well above 0.
+        gate = AuthListGate(
+            max_concurrency=1,
+            min_interval_s=0.0,
+            backoff_base_s=5.0,
+            backoff_max_s=300.0,
+            time_fn=lambda: 1000.0,
+            jitter_fn=lambda: 0.0,
+        )
+        return SessionToolHandler(mock_client, gate=gate), gate
+
+    @pytest.mark.asyncio
+    async def test_streamed_503_opens_breaker_and_next_call_rejects(self):
+        import httpx
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler, gate = self._make_handler(503)
+
+        # First call: the 503 surfaces as an HTTPStatusError through the gate.
+        with pytest.raises(httpx.HTTPStatusError):
+            await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
+
+        # The gate recorded the distress and opened its breaker.
+        assert gate._consecutive_failures == 1
+        assert gate._breaker_open_until == 1000.0 + 5.0  # base window, zero jitter
+
+        # A subsequent call is rejected fast with ISE_BUSY (breaker open),
+        # without ever reaching the stream.
+        with pytest.raises(McpToolError) as ei:
+            await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
+        assert "ISE_BUSY" in str(ei.value)
 
 
 class TestSessionToolHandlerSearchActiveSessions:

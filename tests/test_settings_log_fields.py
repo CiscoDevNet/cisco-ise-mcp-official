@@ -61,9 +61,13 @@ def test_authlist_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("ISE_IP", "192.0.2.1")
     monkeypatch.setenv("ISE_AUTHLIST_MAX_CONCURRENCY", "")
     monkeypatch.setenv("ISE_AUTHLIST_MIN_INTERVAL_S", "")
+    monkeypatch.setenv("ISE_AUTHLIST_BACKOFF_BASE_S", "")
+    monkeypatch.setenv("ISE_AUTHLIST_BACKOFF_MAX_S", "")
 
     from clients.settings import ISESettings
 
     s = ISESettings()
     assert s.authlist_max_concurrency == 1
     assert s.authlist_min_interval_s == 0.0
+    assert s.authlist_backoff_base_s == 5.0
+    assert s.authlist_backoff_max_s == 300.0
