@@ -313,6 +313,23 @@ To remove it: `Remove-Secret -Name ise-api-pwd -Vault LocalStore`.
 > so the secret is never persisted to `.env`. Leave the corresponding key out of
 > your `.env` file so the value from the environment is used.
 
+## Session tools: resource usage & backpressure
+
+The four session tools (`active_sessions_search`, `sessions_search_with_advanced_details`, `sessions_search_with_policy_details`, `sessions_search_with_latency_details`) download all sessions in the requested window from the ISE MnT node. Memory on the MCP server is now bounded (streaming parse; only a small sample is retained) — no longer multi-GB — but MnT still does real work per call, and larger `minutes`/`limit` increase that cost.
+
+Only one such download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Clients should back off and retry.
+
+The four env tunables, as a table, with defaults:
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `ISE_AUTHLIST_MAX_CONCURRENCY` | `1` | Max concurrent AuthList downloads. |
+| `ISE_AUTHLIST_MIN_INTERVAL_S` | `0.0` | Min seconds between download starts (0 = off). Raise to proactively space large downloads on big deployments. |
+| `ISE_AUTHLIST_BACKOFF_BASE_S` | `5.0` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout). |
+| `ISE_AUTHLIST_BACKOFF_MAX_S` | `300.0` | Circuit-breaker max backoff. |
+
+**Guidance:** pass narrow filters (username / MAC / NAS IP) to reduce load; use `ise_investigate_aaa_failure` (bounded, no full download) for failure lookups.
+
 ## Available Tools
 
 See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
