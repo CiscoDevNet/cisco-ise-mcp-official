@@ -1,6 +1,8 @@
 #!/bin/bash
-# Copyright (c) 2025 Cisco Systems, Inc. All Rights Reserved
-# TODO: should we create a single client to all endpoints?
+
+# Copyright 2026 Cisco Systems, Inc. and its affiliates
+#
+# SPDX-License-Identifier: Apache-2.0
 
 
 line_separator="--------------------------------"
