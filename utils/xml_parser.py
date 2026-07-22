@@ -100,10 +100,10 @@ def iter_filter_active_sessions(
     """
     total_matched = 0
     retained: List[Dict[str, Any]] = []
-    context = ET.iterparse(source, events=("end",))
+    context = ET.iterparse(source, events=("start", "end"))
     _, root = next(context)
-    for _, elem in context:
-        if elem.tag != "activeSession":
+    for event, elem in context:
+        if event != "end" or elem.tag != "activeSession":
             continue
         session_data: Dict[str, Any] = {}
         for child in elem:

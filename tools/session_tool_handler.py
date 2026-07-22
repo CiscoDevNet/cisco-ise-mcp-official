@@ -13,7 +13,7 @@ import httpx
 from logger import logger
 from clients.mnt_client import MNTClient
 from clients.auth_list_gate import auth_list_gate
-from utils.xml_parser import parse_active_session_xml, parse_session_detail_xml, iter_filter_active_sessions
+from utils.xml_parser import parse_session_detail_xml, iter_filter_active_sessions
 from utils.sampling import build_sampling_note
 from utils.input_validators import (
     normalize_mac_address,
@@ -25,7 +25,6 @@ from utils.input_validators import (
 )
 from models.session_models import (
     ActiveSession,
-    ActiveSessionList,
     ActiveSessionSearchResult,
     EnrichedSessionSearchResult,
     SessionDetail,
