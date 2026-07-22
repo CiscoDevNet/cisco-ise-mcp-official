@@ -1,0 +1,23 @@
+tests/test_session_tools.py
+  s_f31f651af777a6::t_d982b362e9278a 1610-1669
+utils/xml_parser.py
+  s_f31f651af777a6::t_d43466519cef9d 103,105-106
+tools/session_tool_handler.py
+  s_f31f651af777a6::t_b05281ec7f9164 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0280fc9daab58fcec490fa9c3d7225716f552911",
+  "prompts": {},
+  "sessions": {
+    "s_f31f651af777a6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c0b421bb-98c5-4331-aee9-588f1ccb8559",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
