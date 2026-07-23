@@ -7,8 +7,7 @@
 Three layers, all configurable via ``clients.settings.settings``:
 
 1. Semaphore (default 1): caps concurrent AuthList downloads and rejects
-   immediately when full -- no queue wait (a 60-75s download makes any
-   short wait futile and the MCP client times out at ~21s anyway).
+   immediately when full -- no queue wait.
 2. Min-interval floor (default 0.0 = off): rejects a call that starts
    sooner than ``min_interval_s`` after the previous download started,
    to proactively space large downloads off the MnT node.
