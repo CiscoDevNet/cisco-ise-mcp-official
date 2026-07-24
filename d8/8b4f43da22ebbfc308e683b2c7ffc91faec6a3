@@ -1,0 +1,23 @@
+services/system_summary_parser.py
+  s_33e0452a52e371::t_29c4b62a621e31 10-17
+tests/test_system_summary_parser.py
+  s_33e0452a52e371::t_77b0803375c3ee 64-67,69
+MCP_TOOLS_CATALOG.md
+  s_33e0452a52e371::t_60883c24d52e5b 859
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d88b4f43da22ebbfc308e683b2c7ffc91faec6a3",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
