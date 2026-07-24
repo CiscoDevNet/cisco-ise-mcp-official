@@ -1,0 +1,109 @@
+docs/superpowers/specs/2026-07-16-api-backed-deployment-diagnostics-design.md
+  s_540242e32e5696::t_7d5b739ee0d94a 28-33
+  s_540242e32e5696::t_c69d3715f50e33 110-113
+  s_540242e32e5696::t_2f276627e77d73 329-354
+  s_540242e32e5696::t_fed024e9efe229 41-49
+  s_540242e32e5696::t_83ac769b6ee9bc 204-213,218-222
+  s_540242e32e5696::t_78b3cca3486ed2 395-400
+  s_540242e32e5696::t_85f3a62f1209b6 4-5
+  s_540242e32e5696::t_abe1c683f945cd 364-390
+  s_540242e32e5696::t_3ba9bb5853df51 190-195
+  s_540242e32e5696::t_3f58f1b9e1e516 150,156-159,168-169
+  s_540242e32e5696::t_6021d48857881a 136-139
+  s_540242e32e5696::t_5dd8fb71fe2bb8 104-107,120-135
+  s_540242e32e5696::t_bead98b0f57d5b 274-325
+  s_540242e32e5696::t_969cf319216333 151-155,160-165
+  s_540242e32e5696::t_1c2fd811f89790 214-217
+  s_540242e32e5696::t_7187ac30af5b62 224-262
+  s_540242e32e5696::t_40b251b6e52e01 1-3
+  s_540242e32e5696::t_e08fb6f0e19edf 6-8,25-27
+  s_540242e32e5696::t_a6730914d61082 34-36,38-40
+  s_540242e32e5696::t_1c6e0f6d241415 50-52,101-103
+  s_540242e32e5696::t_1a3852bdc58b18 108-109
+  s_540242e32e5696::t_2ce474f782690e 114-119
+  s_540242e32e5696::t_683bfa58e3077f 140-142,147-149
+  s_540242e32e5696::t_163275e4dce755 166-167
+  s_540242e32e5696::t_dca03a57765e01 170-172,187-189
+  s_540242e32e5696::t_51ad495c7b2c84 196-198,201-203
+  s_540242e32e5696::t_7b974c31945a26 223
+  s_540242e32e5696::t_655455aa6277e9 263-265,271-273
+  s_540242e32e5696::t_8c3c5e99ee9655 326-328
+  s_540242e32e5696::t_9164a1198f8910 355-357,361-363
+  s_540242e32e5696::t_16d4a9ddd8ed32 391-394
+  s_540242e32e5696::t_89a8fa7a7b21b6 9-24,37,53-100,143-146,173-186,199-200,266-270,358-360
+MCP_TOOLS_CATALOG.md
+  s_33e0452a52e371::t_27b457c4eb5563 859
+tests/test_deployment_diagnostics_resolver.py
+  s_33e0452a52e371::t_1a1e2e88114996 160
+services/system_summary_parser.py
+  s_33e0452a52e371::t_f9585ec5bea7d4 119-124,126
+  s_33e0452a52e371::t_1908b931ab54d0 51
+  s_33e0452a52e371::t_8373cf54f5dd6b 70-76
+  s_33e0452a52e371::t_025cfa73a60e69 9-18,49-50,52-69
+  s_33e0452a52e371::t_f73016cfe06758 77
+docs/superpowers/plans/2026-07-16-api-backed-deployment-diagnostics.md
+  s_540242e32e5696::t_97015a306f6931 1103,1110-1111
+  s_540242e32e5696::t_4395d1921f19d4 5-1099,1101,1106-1109,1115-1290,1372-1787
+  s_540242e32e5696::t_8af438e9d9c03a 1294,1297-1371
+  s_540242e32e5696::t_6811ef3d9fa5a4 2-4
+  s_540242e32e5696::t_773b2484467a45 1100
+  s_540242e32e5696::t_4a73c6894d9499 1102
+  s_540242e32e5696::t_4e1b8c95333e98 1104-1105
+  s_540242e32e5696::t_6e34943c259519 1112-1114
+  s_540242e32e5696::t_5aa0e5062f7729 1291-1293
+  s_540242e32e5696::t_309a9243f53c95 1295-1296
+  s_540242e32e5696::t_31f6e22b84868b 1
+tests/test_system_summary_parser.py
+  s_33e0452a52e371::t_a37c8134ae5dfd 47
+  s_33e0452a52e371::t_a897a82650d069 51-60
+  s_33e0452a52e371::t_00166106d77cfd 43-46,61-68,80-81
+  s_33e0452a52e371::t_f08099271740b7 49-50
+docs/superpowers/plans/2026-07-14-ise-cert-auth.md
+  s_dd1fb14d002577::t_bf56887a5b196c 1-976
+docs/superpowers/plans/2026-07-22-session-tool-memory-and-concurrency.md
+  s_3dfbab9b0afed4::t_9c12022fe25a20 1-1158
+docs/superpowers/specs/2026-07-14-ise-cert-auth-design.md
+  s_dd1fb14d002577::t_405baa81231051 1-193
+docs/superpowers/specs/2026-07-22-session-tool-memory-and-concurrency-design.md
+  s_3dfbab9b0afed4::t_775b8b79dab2d3 1-291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "27857244b3d4d7cbaa26b5229db6a09e790e0a01",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_3dfbab9b0afed4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c07b3f0b-b0b0-4853-b82c-2bf36d583571",
+        "model": "unknown"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_540242e32e5696": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d5a7829-6a05-4cc1-87f3-6137e931494a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_dd1fb14d002577": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1de6841-6529-44c8-b665-2614e68d9054",
+        "model": "unknown"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
