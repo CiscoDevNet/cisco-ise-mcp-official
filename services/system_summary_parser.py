@@ -6,15 +6,16 @@
 
 Pure and testable: no I/O. Consumes the dict produced by
 ``utils.xml_parser.iter_parse_system_summary`` and returns a per-node summary of
-process states (running / disabled / not_applicable / down / unknown), the list
-of processes that are down (code 0 only), the ISE-reported top-level status
+process states (running / disabled / initializing / down / not_monitored), the
+list of processes that are down (code 0 only), the ISE-reported top-level status
 verbatim, and min/max/avg/latest aggregates of the 60-minute
 CPU / memory / latency series.
 
 Process-status code semantics (confirmed against the ``70001 System-Stats: ISE
-Process Health`` log line): 1=running, 2=disabled, -1=not_applicable, 0=down
-(the only fault). Unknown codes are surfaced as ``unknown:<n>`` and are not
-faults.
+Process Health`` log line): 0=down (the only fault), 1=running, 2=disabled,
+3=initializing, -1=not_monitored (null / no data). The code space tops out at 3;
+any code greater than 3 — and any unrecognized/blank value — is treated as
+not_monitored (the same as -1) and is never a fault.
 """
 
 from typing import Any, Dict, List
@@ -22,11 +23,15 @@ from typing import Any, Dict, List
 # Elements of <lstProcessStatuses> that are NOT process codes.
 _NON_PROCESS_FIELDS = frozenset({"server", "timestamp", "status", "message"})
 
+# Codes 0-3 and -1 are the full known space. Anything else (>3, blank, or
+# malformed) folds to "not_monitored" via the _CODE_MAP.get default below.
+_NOT_MONITORED = "not_monitored"
 _CODE_MAP = {
+    "0": "down",
     "1": "running",
     "2": "disabled",
-    "-1": "not_applicable",
-    "0": "down",
+    "3": "initializing",
+    "-1": _NOT_MONITORED,
 }
 
 _METRIC_FIELDS = (
@@ -70,7 +75,7 @@ class SystemSummaryParser:
             for field, value in row.items():
                 if field in _NON_PROCESS_FIELDS:
                     continue
-                state = _CODE_MAP.get(value, f"unknown:{value}")
+                state = _CODE_MAP.get(value, _NOT_MONITORED)
                 processes[field] = state
                 if state == "down":
                     processes_down.append(field)

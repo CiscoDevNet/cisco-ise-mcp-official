@@ -23,6 +23,7 @@ def _parsed():
                 "applicationServer": "1",
                 "database": "0",
                 "sxpEngine": "2",
+                "profilerServer": "3",
                 "alertManager": "-1",
                 "identityMapping": "7",
             },
@@ -39,11 +40,13 @@ def _parsed():
 def test_process_code_mapping():
     out = SystemSummaryParser().build(_parsed())
     procs = out["vm218"]["processes"]
-    assert procs["applicationServer"] == "running"   # 1
-    assert procs["database"] == "down"               # 0
-    assert procs["sxpEngine"] == "disabled"          # 2
-    assert procs["alertManager"] == "not_applicable" # -1
-    assert procs["identityMapping"] == "unknown:7"   # unknown
+    assert procs["applicationServer"] == "running"       # 1
+    assert procs["database"] == "down"                   # 0
+    assert procs["sxpEngine"] == "disabled"              # 2
+    assert procs["profilerServer"] == "initializing"     # 3
+    assert procs["alertManager"] == "not_monitored"      # -1
+    # Codes above the known space (>3), like 7, fold to not_monitored.
+    assert procs["identityMapping"] == "not_monitored"   # 7 -> not_monitored
 
 
 def test_non_process_fields_excluded_from_processes():
