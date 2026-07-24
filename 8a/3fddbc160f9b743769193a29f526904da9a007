@@ -1,0 +1,23 @@
+services/deployment_diagnostics_resolver.py
+  s_33e0452a52e371::t_e00cc2d4e9d5c1 89-99
+clients/mnt_gate.py
+  s_33e0452a52e371::t_048320fd78fff5 137
+  s_33e0452a52e371::t_d30a9c3e364111 74
+  s_33e0452a52e371::t_f5ad0cfb91f5ac 9,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "8a3fddbc160f9b743769193a29f526904da9a007",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
