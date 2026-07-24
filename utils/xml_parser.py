@@ -484,3 +484,74 @@ def parse_msg_catalog(xml_path: str) -> Dict[str, str]:
 
     logger.info("Loaded message catalog", count=len(catalog), path=xml_path)
     return catalog
+
+
+def iter_parse_system_summary(source) -> Dict[str, Any]:
+    """Stream-parse the getSystemSummaryDetails dashboard XML from the MnT API.
+
+    Uses ``ET.iterparse`` + ``root.clear()`` (the same memory-bounded idiom as
+    ``parse_msg_catalog`` / ``iter_filter_active_sessions``) so peak memory is
+    proportional to one repeated element subtree, not the whole document.
+
+    Returns a dict with two lists:
+      - ``process_statuses``: one dict per ``<lstProcessStatuses>`` node,
+        mapping each child tag to its text (empty elements -> None).
+      - ``status_60min``: one dict per ``<lstSystemStatus60Min>`` sample,
+        with server/timestamp/cpuUtilization/memoryUtilization/latency.
+
+    The ``<lstSystemStatus24Hr>`` series is intentionally skipped (its subtree
+    is cleared but never materialized).
+
+    Args:
+        source: Anything ``ET.iterparse`` accepts (file object or path).
+
+    Raises:
+        ET.ParseError: If the XML is malformed.
+        ValueError: If the root element is not ``dashboardResult``.
+    """
+    def _local(tag: str) -> str:
+        return tag.split("}", 1)[-1] if "}" in tag else tag
+
+    def _row(elem) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        for child in elem:
+            text = child.text if child.text and child.text.strip() else None
+            data[_local(child.tag)] = text
+        return data
+
+    process_statuses: List[Dict[str, Any]] = []
+    status_60min: List[Dict[str, Any]] = []
+    try:
+        context = ET.iterparse(source, events=("start", "end"))
+        _, root = next(context)  # first event is 'start' on the root element
+        if _local(root.tag) != "dashboardResult":
+            raise ValueError(
+                f"Expected root element 'dashboardResult', got '{root.tag}'"
+            )
+        for event, elem in context:
+            if event != "end":
+                continue
+            tag = _local(elem.tag)
+            if tag == "lstProcessStatuses":
+                process_statuses.append(_row(elem))
+                root.clear()
+            elif tag == "lstSystemStatus60Min":
+                status_60min.append(_row(elem))
+                root.clear()
+            elif tag == "lstSystemStatus24Hr":
+                root.clear()  # unused; free the subtree immediately
+    except ET.ParseError as e:
+        logger.error("Failed to parse system summary XML", error=str(e))
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error parsing system summary XML", error=str(e))
+        raise
+
+    logger.debug(
+        "Streamed system summary XML",
+        process_nodes=len(process_statuses),
+        samples_60min=len(status_60min),
+    )
+    return {"process_statuses": process_statuses, "status_60min": status_60min}
