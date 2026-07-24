@@ -1,0 +1,21 @@
+tests/test_xml_parser_system_summary.py
+  s_33e0452a52e371::t_ee406c809f0cd7 1-86
+utils/xml_parser.py
+  s_33e0452a52e371::t_ecd5eb76c82592 487-557
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5165717299d71e5be924b1cc7209a0641b4a4e9f",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
