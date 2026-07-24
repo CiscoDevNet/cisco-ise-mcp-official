@@ -1,0 +1,19 @@
+services/system_stats_parser.py
+  s_33e0452a52e371::t_c7b57c14b58c21 5,7-10,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6cd1324901465cee5c922300cdea79746f3999c5",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
