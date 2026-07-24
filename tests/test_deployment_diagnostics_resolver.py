@@ -157,7 +157,7 @@ class TestSystemStats:
         assert result.system_stats["source"] == "getSystemSummaryDetails"
         assert result.system_stats["duration_minutes"] == 60
         assert set(result.system_stats["nodes"].keys()) == {"vm218", "vm219"}
-        assert result.system_stats["nodes"]["vm218"]["processes_down"] == ["database"]
+        assert result.system_stats["nodes"]["vm218"]["processes_down"] == ["Database Server"]
         assert result.system_stats["nodes"]["vm218"]["cpu_percent"]["latest"] == 4.0
 
     @pytest.mark.asyncio

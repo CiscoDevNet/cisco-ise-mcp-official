@@ -40,13 +40,32 @@ def _parsed():
 def test_process_code_mapping():
     out = SystemSummaryParser().build(_parsed())
     procs = out["vm218"]["processes"]
-    assert procs["applicationServer"] == "running"       # 1
-    assert procs["database"] == "down"                   # 0
-    assert procs["sxpEngine"] == "disabled"              # 2
+    # Processes are keyed by their human-readable service name.
+    assert procs["Application Server"] == "running"      # 1
+    assert procs["Database Server"] == "down"            # 0
+    assert procs["SXP Engine Service"] == "disabled"     # 2
+    # An unmapped bean field falls back to the raw name verbatim.
     assert procs["profilerServer"] == "initializing"     # 3
-    assert procs["alertManager"] == "not_monitored"      # -1
-    # Codes above the known space (>3), like 7, fold to not_monitored.
-    assert procs["identityMapping"] == "not_monitored"   # 7 -> not_monitored
+
+
+def test_unmapped_field_falls_back_to_raw_name():
+    parsed = {
+        "process_statuses": [{"server": "vm1", "someNewService": "1"}],
+        "status_60min": [],
+    }
+    out = SystemSummaryParser().build(parsed)
+    procs = out["vm1"]["processes"]
+    assert procs == {"someNewService": "running"}
+
+
+def test_not_monitored_processes_omitted():
+    out = SystemSummaryParser().build(_parsed())
+    procs = out["vm218"]["processes"]
+    # -1 (nvl fallback) and codes above the known space (>3) both resolve to
+    # not_monitored and are dropped rather than surfaced.
+    assert "alertManager" not in procs                   # -1
+    assert "PassiveID WMI Service" not in procs          # 7 -> not_monitored
+    assert not any(v == "not_monitored" for v in procs.values())
 
 
 def test_non_process_fields_excluded_from_processes():
@@ -58,7 +77,8 @@ def test_non_process_fields_excluded_from_processes():
 
 def test_processes_down_lists_only_code_zero():
     out = SystemSummaryParser().build(_parsed())
-    assert out["vm218"]["processes_down"] == ["database"]
+    # Down list uses the same human-readable service names.
+    assert out["vm218"]["processes_down"] == ["Database Server"]
 
 
 def test_metric_aggregation():

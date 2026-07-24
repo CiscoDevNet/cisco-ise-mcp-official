@@ -6,9 +6,16 @@
 
 Pure and testable: no I/O. Consumes the dict produced by
 ``utils.xml_parser.iter_parse_system_summary`` and returns a per-node summary of
-process states (running / disabled / initializing / down / not_monitored), the
-list of processes that are down (code 0 only), and min/max/avg/latest aggregates
-of the 60-minute CPU / memory / latency series.
+process states (running / disabled / initializing / down), the list of processes
+that are down (code 0 only), and min/max/avg/latest aggregates of the 60-minute
+CPU / memory / latency series. Processes are keyed by their human-readable
+service name (e.g. "Application Server"), not the raw camelCase bean field.
+
+Services that resolve to ``not_monitored`` are omitted entirely rather than
+surfaced. That state covers three cases that all mean "no signal": the ``-1``
+nvl fallback (service not reported), any unrecognized/blank code, and the
+dead-wired bean fields whose DB columns no writer ever populates (e.g.
+``alertManager``, the ``xgrid*`` fields) — so they never carry a real state.
 
 The top-level ``<status>``/``<message>`` elements are intentionally NOT surfaced:
 that endpoint's JAXB field-access serialization emits a default "Failed" because
@@ -38,6 +45,35 @@ _CODE_MAP = {
     "3": "initializing",
     "-1": _NOT_MONITORED,
 }
+
+# Bean field (XML child tag) -> human-readable service name, per the ISE
+# syslog "ISE Process Health" -> mnt_process_status -> ProcessStatus bean
+# mapping. Fields not listed here fall back to the raw bean field name.
+_DISPLAY_NAMES = {
+    "databaseListener": "Database Listener",
+    "database": "Database Server",
+    "applicationServer": "Application Server",
+    "sessionDatabase": "M&T Session Database",
+    "logCollector": "M&T Log Collector",
+    "logProcessor": "M&T Log Processor",
+    "profilerDb": "Profiler Database",
+    "sxpEngine": "SXP Engine Service",
+    "deviceAdmin": "Device Admin Service",
+    "ipepService": "IPEP Service",
+    "certificateAuthority": "Certificate Authority Service",
+    "identityMapping": "PassiveID WMI Service",
+    "aDConnector": "AD Connector",
+}
+
+
+def _display_name(field: str) -> str:
+    """Human-readable service name for a bean field.
+
+    Unmapped fields fall back to the raw bean field name verbatim rather than a
+    guessed humanization, so an unknown service is never given a fabricated
+    display name.
+    """
+    return _DISPLAY_NAMES.get(field, field)
 
 _METRIC_FIELDS = (
     ("cpu_percent", "cpuUtilization"),
@@ -80,9 +116,14 @@ class SystemSummaryParser:
                 if field in _NON_PROCESS_FIELDS:
                     continue
                 state = _CODE_MAP.get(value, _NOT_MONITORED)
-                processes[field] = state
+                if state == _NOT_MONITORED:
+                    # No signal (-1 nvl fallback, unknown code, or a dead-wired
+                    # bean field). Omit rather than surface a non-state.
+                    continue
+                name = _display_name(field)
+                processes[name] = state
                 if state == "down":
-                    processes_down.append(field)
+                    processes_down.append(name)
             node = _blank_node()
             node["processes_down"] = processes_down
             node["processes"] = processes
