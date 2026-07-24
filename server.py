@@ -105,7 +105,7 @@ policy_tool_handler = PolicyToolHandler(client_factory)
 policy_context_resolver = PolicyContextResolver(policy_tool_handler)
 session_tool_handler = SessionToolHandler(mnt_client)
 failure_tool_handler = FailureToolHandler(mnt_client)
-deployment_diagnostics_resolver = DeploymentDiagnosticsResolver()
+deployment_diagnostics_resolver = DeploymentDiagnosticsResolver(mnt_client)
 deployment_tool_handler = DeploymentToolHandler(
     client_factory, deployment_diagnostics_resolver
 )
@@ -318,14 +318,16 @@ async def ise_deployment_health(
         "(whether a Secondary PAN exists, PAN failover readiness) — re-run without "
         "hostnames to assess HA.",
     ] = None,
-    deep_diagnostics: Annotated[
+    diagnostics: Annotated[
         bool,
-        "Default false. When true, also gather deeper per-node diagnostic data "
-        "(log-derived system stats: CPU, memory, process health, replication "
-        "indicators). Heavier and slower — set true ONLY when the user's wording "
-        "signals a problem or asks to investigate/diagnose (e.g. 'down', "
-        "'not syncing', 'out of sync', 'registration failed', 'overloaded'). "
-        "Keep false for general status, topology, readiness, or HA questions.",
+        "Default false. When true, attach API-backed per-node diagnostics "
+        "(process health + CPU/memory/latency from the MnT "
+        "getSystemSummaryDetails API). Opt-in: the response can be large in big "
+        "deployments and the call is gated for MnT-node backpressure. Set true "
+        "ONLY when the user's wording signals a problem or asks to "
+        "investigate/diagnose (e.g. 'down', 'not syncing', 'out of sync', "
+        "'registration failed', 'overloaded'). Keep false for general status, "
+        "topology, readiness, or HA questions.",
     ] = False,
 ) -> DeploymentHealthResult:
     """
@@ -343,6 +345,11 @@ async def ise_deployment_health(
       presence, ha_ready, and verdict (healthy | degraded | critical). The
       PAN-redundancy/HA fields are populated only for a full-deployment query;
       with hostnames set the scope is "filtered" and they are null.
+    - diagnostics: Present only when diagnostics=true — per-node process health
+      (from the MnT getSystemSummaryDetails API) plus CPU/memory/latency and
+      derived observations. Nodes with a process reporting "down" are flagged.
+      On MnT-node load or an API/parse failure, system_stats degrades to an
+      {status: "unavailable", reason} block; the base summary is unaffected.
 
     Do NOT use for: live authentication/session details (use the session tools);
     certificate expiry or TLS errors (use ise_diagnose_certificate_issues); or
@@ -351,7 +358,7 @@ async def ise_deployment_health(
     """
     result: DeploymentHealthResult = await deployment_tool_handler.get_deployment_health(
         hostnames=hostnames,
-        deep_diagnostics=deep_diagnostics,
+        diagnostics=diagnostics,
     )
     return result
 
