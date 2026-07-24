@@ -6,11 +6,11 @@
 
 Three layers, all configurable via ``clients.settings.settings``:
 
-1. Semaphore (default 1): caps concurrent AuthList downloads and rejects
+1. Semaphore (default 1): caps concurrent heavy MnT reads and rejects
    immediately when full -- no queue wait.
 2. Min-interval floor (default 0.0 = off): rejects a call that starts
    sooner than ``min_interval_s`` after the previous download started,
-   to proactively space large downloads off the MnT node.
+   to proactively space large reads off the MnT node.
 3. Adaptive circuit breaker: opens on MnT distress (HTTP 502/503/504,
    connect/read timeouts) for a window that doubles per consecutive
    failure (base -> ... -> max, plus jitter). While open, calls reject
@@ -71,7 +71,7 @@ class MntGate:
         )
 
     def _reject(self, reason: str) -> None:
-        logger.warning("AuthList gate rejected call", reason=reason)
+        logger.warning("MnT gate rejected call", reason=reason)
         raise_tool_error(
             ErrorCategory.EXTERNAL_ERROR,
             "ISE_BUSY",
@@ -134,7 +134,7 @@ class MntGate:
             self._breaker_open_until = self._time_fn() + window
             self._probing = False
             logger.warning(
-                "AuthList breaker opened",
+                "MnT breaker opened",
                 consecutive_failures=self._consecutive_failures,
                 open_for_s=round(window, 2),
             )

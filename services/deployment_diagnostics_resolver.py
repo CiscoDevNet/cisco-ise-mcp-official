@@ -86,6 +86,17 @@ class DeploymentDiagnosticsResolver:
 
         wanted = {n.hostname for n in nodes}
         scoped_nodes = {h: v for h, v in per_node.items() if h in wanted}
+        if per_node and not scoped_nodes:
+            # The summary returned rows but none matched the requested
+            # hostnames (e.g. the summary keys by a name form the node list
+            # does not use). Surface it so an all-empty nodes block is not
+            # mistaken for a healthy deployment with no faults.
+            logger.info(
+                "Deployment diagnostics: system summary rows did not match "
+                "any requested node",
+                summary_row_count=len(per_node),
+                requested_node_count=len(wanted),
+            )
 
         observations: list[str] = []
         for hostname, data in scoped_nodes.items():
