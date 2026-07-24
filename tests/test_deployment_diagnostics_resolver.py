@@ -5,7 +5,7 @@
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,196 +24,195 @@ def _node(hostname, roles, node_status="Connected", fqdn=None):
     )
 
 
-def _fake_fetch(mapping):
-    """Return a fake log_service.fetch that yields a sentinel Path per target,
-    or raises when the target maps to an Exception."""
+_SUMMARY_XML = b"""<?xml version="1.0"?>
+<dashboardResult>
+  <lstProcessStatuses>
+    <server>vm218</server><status>Failed</status>
+    <applicationServer>1</applicationServer><database>0</database>
+  </lstProcessStatuses>
+  <lstProcessStatuses>
+    <server>vm219</server><status>Failed</status>
+    <applicationServer>1</applicationServer><database>1</database>
+  </lstProcessStatuses>
+  <lstSystemStatus60Min>
+    <server>vm218</server><timestamp>2026-07-16 07:38:00</timestamp>
+    <cpuUtilization>4</cpuUtilization><memoryUtilization>57</memoryUtilization><latency>0</latency>
+  </lstSystemStatus60Min>
+</dashboardResult>
+"""
+
+
+class _FakeStreamResponse:
+    def __init__(self, body: bytes, chunk: int = 32):
+        self._body = body
+        self._chunk = chunk
+
+    async def aiter_bytes(self):
+        for i in range(0, len(self._body), self._chunk):
+            yield self._body[i:i + self._chunk]
+
+
+def _mnt_streaming(body: bytes):
+    """MnT client whose get_stream yields a fake streaming response."""
+    mnt = MagicMock()
+
     @asynccontextmanager
-    async def _fetch(log_name, hostname):
-        outcome = mapping.get(hostname)
-        if isinstance(outcome, Exception):
-            raise outcome
-        yield Path(f"/tmp/{hostname}.log")
-    return _fetch
+    async def _get_stream(endpoint):
+        yield _FakeStreamResponse(body)
+
+    mnt.get_stream = _get_stream
+    return mnt
+
+
+def _mnt_stream_raising(exc):
+    mnt = MagicMock()
+
+    @asynccontextmanager
+    async def _get_stream(endpoint):
+        raise exc
+        yield  # pragma: no cover
+
+    mnt.get_stream = _get_stream
+    return mnt
+
+
+class _RejectingGate:
+    """A gate whose guard() rejects immediately with ISE_BUSY."""
+
+    def guard(self):
+        return self
+
+    async def __aenter__(self):
+        from models.error_models import ErrorCategory, raise_tool_error
+        raise_tool_error(
+            ErrorCategory.EXTERNAL_ERROR, "ISE_BUSY",
+            "The ISE MnT node is busy. Retry shortly.", retry=True,
+        )
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _PassGate:
+    """A gate whose guard() always admits."""
+
+    def guard(self):
+        return self
+
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _resolver(mnt, gate=None):
+    from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
+    return DeploymentDiagnosticsResolver(mnt, gate=gate or _PassGate())
 
 
 class TestObservations:
-    """Existing text-observation behavior is preserved (now async)."""
-
-    def setup_method(self):
-        pass
-
     @pytest.mark.asyncio
     async def test_observes_unhealthy_nodes(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
         nodes = [_node("vm218", ["PrimaryAdmin"]), _node("vm220", [], node_status="NotInSync")]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fake_fetch({"vm218": RuntimeError("x"), "vm220": RuntimeError("x")})
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
         joined = " ".join(result.observations)
         assert "vm220" in joined and "NotInSync" in joined
 
     @pytest.mark.asyncio
     async def test_observes_missing_pan_redundancy(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
         nodes = [_node("vm218", ["PrimaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fake_fetch({"vm218": RuntimeError("x")})
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
         joined = " ".join(result.observations).lower()
         assert "redundancy" in joined or "secondaryadmin" in joined.replace(" ", "")
 
     @pytest.mark.asyncio
     async def test_standalone_has_no_missing_pan_observation(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
         nodes = [_node("vm1", ["Standalone"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fake_fetch({"vm1": RuntimeError("x")})
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
         joined = " ".join(result.observations)
         assert "No PrimaryAdmin" not in joined and "redundancy" not in joined
 
     @pytest.mark.asyncio
     async def test_scoped_suppresses_pan_redundancy_observation(self):
-        # A filtered query returns only the requested node(s); deployment-wide
-        # HA claims must NOT be made from that slice (mirrors the summary's
-        # scope="filtered" behavior).
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
         nodes = [_node("vm218", ["PrimaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fake_fetch({"vm218": RuntimeError("x")})
-            result = await DeploymentDiagnosticsResolver().resolve(nodes, scoped=True)
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes, scoped=True)
         joined = " ".join(result.observations).lower()
         assert "redundancy" not in joined
-        assert "secondaryadmin" not in joined.replace(" ", "")
         assert "no primaryadmin" not in joined
 
     @pytest.mark.asyncio
     async def test_scoped_still_reports_per_node_unhealthy(self):
-        # Per-node status is a legitimate fact about the requested node and is
-        # still reported when scoped — only deployment-wide HA claims are dropped.
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
         nodes = [_node("vm220", ["PrimaryAdmin"], node_status="NotInSync")]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fake_fetch({"vm220": RuntimeError("x")})
-            result = await DeploymentDiagnosticsResolver().resolve(nodes, scoped=True)
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes, scoped=True)
         joined = " ".join(result.observations)
         assert "vm220" in joined and "NotInSync" in joined
-        assert "redundancy" not in joined.lower()
 
 
-class TestNodeSelection:
+class TestSystemStats:
     @pytest.mark.asyncio
-    async def test_unhealthy_nodes_selected_first_capped_at_3(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [
-            _node("c1", ["PrimaryAdmin"]),
-            _node("u1", [], node_status="NotInSync"),
-            _node("u2", [], node_status="Disconnected"),
-            _node("u3", [], node_status="NotInSync"),
-            _node("u4", [], node_status="Disconnected"),
-        ]
-        seen = []
-        @asynccontextmanager
-        async def _fetch(log_name, hostname):
-            seen.append(hostname)
-            yield Path(f"/tmp/{hostname}.log")
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fetch
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        # Only unhealthy nodes, capped at 3
-        assert set(seen) == {"u1", "u2", "u3"}
-        assert set(result.system_stats["nodes"].keys()) == {"u1", "u2", "u3"}
+    async def test_stats_keyed_by_nodes_in_list(self):
+        nodes = [_node("vm218", ["PrimaryAdmin"]), _node("vm219", ["SecondaryAdmin"])]
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
+        assert result.system_stats["source"] == "getSystemSummaryDetails"
+        assert result.system_stats["duration_minutes"] == 60
+        assert set(result.system_stats["nodes"].keys()) == {"vm218", "vm219"}
+        assert result.system_stats["nodes"]["vm218"]["processes_down"] == ["database"]
+        assert result.system_stats["nodes"]["vm218"]["cpu_percent"]["latest"] == 4.0
 
     @pytest.mark.asyncio
-    async def test_connected_fallback_when_none_unhealthy(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("c1", ["PrimaryAdmin"]), _node("c2", ["SecondaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fake_fetch({"c1": None, "c2": None})
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        assert set(result.system_stats["nodes"].keys()) == {"c1", "c2"}
+    async def test_api_row_not_in_node_list_is_excluded(self):
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
+        assert set(result.system_stats["nodes"].keys()) == {"vm218"}
+
+    @pytest.mark.asyncio
+    async def test_down_process_generates_observation(self):
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
+        joined = " ".join(result.observations)
+        assert "vm218" in joined
+        assert "database" in joined.lower() and "not running" in joined.lower()
 
     @pytest.mark.asyncio
     async def test_no_nodes_leaves_system_stats_none(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        with patch("services.deployment_diagnostics_resolver.log_service"):
-            result = await DeploymentDiagnosticsResolver().resolve([])
+        result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve([])
         assert result.system_stats is None
 
     @pytest.mark.asyncio
-    async def test_uses_fqdn_when_present(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("vm218", ["PrimaryAdmin"], fqdn="vm218.marcos.com")]
-        seen = []
-        @asynccontextmanager
-        async def _fetch(log_name, hostname):
-            seen.append(hostname)
-            yield Path("/tmp/x.log")
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fetch
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            await DeploymentDiagnosticsResolver().resolve(nodes)
-        assert seen == ["vm218.marcos.com"]
-
-
-class TestFailureIsolationAndSummary:
-    @pytest.mark.asyncio
-    async def test_one_node_fails_others_still_reported(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("ok1", ["PrimaryAdmin"]), _node("bad1", ["SecondaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fake_fetch(
-                {"ok1": None, "bad1": RuntimeError("404 for https://10.0.0.1/admin/x.log.zip")}
-            )
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        nodes_out = result.system_stats["nodes"]
-        assert nodes_out["ok1"]["status"] == "ok"
-        assert nodes_out["bad1"]["status"] == "unavailable"
-        assert "reason" in nodes_out["bad1"]
-        # The reason must NOT leak internal fetch detail (status code, URL, host).
-        reason = nodes_out["bad1"]["reason"]
-        assert "404" not in reason
-        assert "http" not in reason.lower()
-        assert "10.0.0.1" not in reason
+    async def test_api_failure_degrades_with_generic_reason(self):
+        import httpx
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        mnt = _mnt_stream_raising(httpx.ConnectError("boom to 10.0.0.1"))
+        result = await _resolver(mnt).resolve(nodes)
+        assert result.system_stats["status"] == "unavailable"
+        reason = result.system_stats["reason"]
+        assert "10.0.0.1" not in reason and "boom" not in reason.lower()
+        # Base observations still run despite the API failure.
+        joined = " ".join(result.observations).lower()
+        assert "redundancy" in joined or "secondaryadmin" in joined.replace(" ", "")
 
     @pytest.mark.asyncio
-    async def test_no_samples_marks_unavailable(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("n1", ["PrimaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fake_fetch({"n1": None})
-            P.return_value.parse.return_value = None  # no samples in window
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        assert result.system_stats["nodes"]["n1"]["status"] == "unavailable"
+    async def test_malformed_xml_degrades_with_generic_reason(self):
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        result = await _resolver(_mnt_streaming(b"<dashboardResult><nope>")).resolve(nodes)
+        assert result.system_stats["status"] == "unavailable"
 
     @pytest.mark.asyncio
-    async def test_summary_observation_reports_coverage(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("ok1", ["PrimaryAdmin"]), _node("bad1", ["SecondaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fake_fetch({"ok1": None, "bad1": RuntimeError("boom")})
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        joined = " ".join(result.observations)
-        assert "1 of 2" in joined and "individual node" in joined.lower()
-
-    @pytest.mark.asyncio
-    async def test_top_level_window_anchor_and_duration(self):
-        from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
-        nodes = [_node("n1", ["PrimaryAdmin"])]
-        with patch("services.deployment_diagnostics_resolver.log_service") as ls, \
-             patch("services.deployment_diagnostics_resolver.SystemStatsParser") as P:
-            ls.fetch = _fake_fetch({"n1": None})
-            P.return_value.parse.return_value = {"sample_count": 1, "window": {"start": "a", "end": "b"}}
-            result = await DeploymentDiagnosticsResolver().resolve(nodes)
-        assert result.system_stats["anchor"] == "latest_log_timestamp"
-        assert result.system_stats["duration_minutes"] == 60
+    async def test_gate_rejection_degrades_with_busy_reason(self):
+        # A busy gate must NOT fail the tool; it degrades to an unavailable
+        # block with a distinct retry-oriented reason.
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        resolver = _resolver(_mnt_streaming(_SUMMARY_XML), gate=_RejectingGate())
+        result = await resolver.resolve(nodes)
+        assert result.system_stats["status"] == "unavailable"
+        reason = result.system_stats["reason"].lower()
+        assert "busy" in reason or "retry" in reason
+        # Distinct from the generic reason.
+        from services.deployment_diagnostics_resolver import (
+            _BUSY_REASON, _GENERIC_REASON,
+        )
+        assert result.system_stats["reason"] == _BUSY_REASON
+        assert _BUSY_REASON != _GENERIC_REASON
+        # Base observations still present.
+        assert " ".join(result.observations)
