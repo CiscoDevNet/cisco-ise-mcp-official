@@ -323,10 +323,10 @@ The four env tunables, as a table, with defaults:
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `ISE_AUTHLIST_MAX_CONCURRENCY` | `1` | Max concurrent AuthList downloads. |
-| `ISE_AUTHLIST_MIN_INTERVAL_S` | `0.0` | Min seconds between download starts (0 = off). Raise to proactively space large downloads on big deployments. |
-| `ISE_AUTHLIST_BACKOFF_BASE_S` | `5.0` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout). |
-| `ISE_AUTHLIST_BACKOFF_MAX_S` | `300.0` | Circuit-breaker max backoff. |
+| `ISE_MNT_GATE_MAX_CONCURRENCY` | `1` | Max concurrent heavy MnT reads (AuthList downloads and deployment-diagnostics summary). |
+| `ISE_MNT_GATE_MIN_INTERVAL_S` | `0.0` | Min seconds between heavy MnT read starts (0 = off). Raise to proactively space large reads on big deployments. |
+| `ISE_MNT_GATE_BACKOFF_BASE_S` | `5.0` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout). |
+| `ISE_MNT_GATE_BACKOFF_MAX_S` | `300.0` | Circuit-breaker max backoff. |
 
 **Guidance:** pass narrow filters (username / MAC / NAS IP) to reduce load; use `ise_investigate_aaa_failure` (bounded, no full download) for failure lookups.
 

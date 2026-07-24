@@ -307,7 +307,7 @@ class TestFetchAuthListGateIntegration:
     """A streamed MnT distress status must open the REAL gate's breaker.
 
     Unlike TestFetchAuthListSessions (which injects a pass-through gate),
-    this wires a real AuthListGate so the distress signal from get_stream's
+    this wires a real MntGate so the distress signal from get_stream's
     raise_for_status propagates through guard() and records a failure --
     verifying the handler->gate->breaker seam end to end.
     """
@@ -316,7 +316,7 @@ class TestFetchAuthListGateIntegration:
         import contextlib
         from unittest.mock import AsyncMock
         import httpx
-        from clients.auth_list_gate import AuthListGate
+        from clients.mnt_gate import MntGate
         from tools.session_tool_handler import SessionToolHandler
 
         request = httpx.Request("GET", "https://ise/admin/API/mnt/Session/AuthList/x/null")
@@ -333,7 +333,7 @@ class TestFetchAuthListGateIntegration:
         mock_client.get_stream = fake_get_stream
 
         # Real gate, deterministic clock/jitter, breaker window well above 0.
-        gate = AuthListGate(
+        gate = MntGate(
             max_concurrency=1,
             min_interval_s=0.0,
             backoff_base_s=5.0,

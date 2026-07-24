@@ -12,7 +12,7 @@ import httpx
 
 from logger import logger
 from clients.mnt_client import MNTClient
-from clients.auth_list_gate import auth_list_gate
+from clients.mnt_gate import mnt_gate
 from utils.xml_parser import parse_session_detail_xml, iter_filter_active_sessions
 from utils.sampling import build_sampling_note
 from utils.input_validators import (
@@ -42,10 +42,10 @@ class SessionToolHandler:
 
         Args:
             mnt_client: The MNT HTTP client instance
-            gate: Optional AuthListGate for concurrency control (defaults to singleton)
+            gate: Optional MntGate for concurrency control (defaults to singleton)
         """
         self.mnt_client = mnt_client
-        self.gate = gate if gate is not None else auth_list_gate
+        self.gate = gate if gate is not None else mnt_gate
 
     MAX_MINUTES = 24 * 60
 
@@ -106,7 +106,7 @@ class SessionToolHandler:
                     # The iterparse walk is synchronous and CPU-bound (and may
                     # read from a spilled-to-disk temp file). Run it off the
                     # event loop so a large parse cannot stall unrelated calls
-                    # -- essential once ISE_AUTHLIST_MAX_CONCURRENCY > 1, where
+                    # -- essential once ISE_MNT_GATE_MAX_CONCURRENCY > 1, where
                     # multiple parses would otherwise serialize on the loop.
                     retained, total_matched = await asyncio.to_thread(
                         iter_filter_active_sessions, buf, predicate, retention_cap

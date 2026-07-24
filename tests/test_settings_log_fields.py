@@ -37,13 +37,13 @@ def test_cookie_is_secret(monkeypatch):
     assert s.ise_admin_session_cookie.get_secret_value().startswith("APPSESSIONID=")
 
 
-def test_authlist_gate_defaults(monkeypatch):
+def test_mnt_gate_defaults(monkeypatch):
     # Ensure a clean env so defaults apply.
     for var in (
-        "ISE_AUTHLIST_MAX_CONCURRENCY",
-        "ISE_AUTHLIST_MIN_INTERVAL_S",
-        "ISE_AUTHLIST_BACKOFF_BASE_S",
-        "ISE_AUTHLIST_BACKOFF_MAX_S",
+        "ISE_MNT_GATE_MAX_CONCURRENCY",
+        "ISE_MNT_GATE_MIN_INTERVAL_S",
+        "ISE_MNT_GATE_BACKOFF_BASE_S",
+        "ISE_MNT_GATE_BACKOFF_MAX_S",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("ISE_IP", "192.0.2.1")
@@ -51,23 +51,23 @@ def test_authlist_gate_defaults(monkeypatch):
     from clients.settings import ISESettings
 
     s = ISESettings()
-    assert s.authlist_max_concurrency == 1
-    assert s.authlist_min_interval_s == 0.0
-    assert s.authlist_backoff_base_s == 5.0
-    assert s.authlist_backoff_max_s == 300.0
+    assert s.mnt_gate_max_concurrency == 1
+    assert s.mnt_gate_min_interval_s == 0.0
+    assert s.mnt_gate_backoff_base_s == 5.0
+    assert s.mnt_gate_backoff_max_s == 300.0
 
 
-def test_authlist_empty_env_falls_back_to_default(monkeypatch):
+def test_mnt_gate_empty_env_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("ISE_IP", "192.0.2.1")
-    monkeypatch.setenv("ISE_AUTHLIST_MAX_CONCURRENCY", "")
-    monkeypatch.setenv("ISE_AUTHLIST_MIN_INTERVAL_S", "")
-    monkeypatch.setenv("ISE_AUTHLIST_BACKOFF_BASE_S", "")
-    monkeypatch.setenv("ISE_AUTHLIST_BACKOFF_MAX_S", "")
+    monkeypatch.setenv("ISE_MNT_GATE_MAX_CONCURRENCY", "")
+    monkeypatch.setenv("ISE_MNT_GATE_MIN_INTERVAL_S", "")
+    monkeypatch.setenv("ISE_MNT_GATE_BACKOFF_BASE_S", "")
+    monkeypatch.setenv("ISE_MNT_GATE_BACKOFF_MAX_S", "")
 
     from clients.settings import ISESettings
 
     s = ISESettings()
-    assert s.authlist_max_concurrency == 1
-    assert s.authlist_min_interval_s == 0.0
-    assert s.authlist_backoff_base_s == 5.0
-    assert s.authlist_backoff_max_s == 300.0
+    assert s.mnt_gate_max_concurrency == 1
+    assert s.mnt_gate_min_interval_s == 0.0
+    assert s.mnt_gate_backoff_base_s == 5.0
+    assert s.mnt_gate_backoff_max_s == 300.0

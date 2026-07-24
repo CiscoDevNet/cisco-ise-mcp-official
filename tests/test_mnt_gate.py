@@ -28,9 +28,9 @@ class FakeClock:
 
 
 def _gate(max_concurrency=1, min_interval_s=0.0, base=5.0, mx=300.0, clock=None):
-    from clients.auth_list_gate import AuthListGate
+    from clients.mnt_gate import MntGate
 
-    return AuthListGate(
+    return MntGate(
         max_concurrency=max_concurrency,
         min_interval_s=min_interval_s,
         backoff_base_s=base,

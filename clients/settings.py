@@ -57,8 +57,8 @@ class ISESettings(BaseSettings):
         "ise_admin_session_cookie", "log_cache_ttl_s", "log_cache_dir_prefix",
         "ise_client_cert", "ise_client_key", "ise_client_key_password",
         "ise_ca_bundle",
-        "authlist_max_concurrency", "authlist_min_interval_s",
-        "authlist_backoff_base_s", "authlist_backoff_max_s",
+        "mnt_gate_max_concurrency", "mnt_gate_min_interval_s",
+        "mnt_gate_backoff_base_s", "mnt_gate_backoff_max_s",
         mode="before",
     )
     @classmethod
@@ -79,23 +79,23 @@ class ISESettings(BaseSettings):
     # event loop (asyncio.to_thread), so raising this overlaps both the
     # downloads and their parses; raise only with MnT-node headroom, since
     # each concurrent call is real work on the ISE MnT node.
-    authlist_max_concurrency: int = Field(
-        default=1, ge=1, le=16, validation_alias="ISE_AUTHLIST_MAX_CONCURRENCY"
+    mnt_gate_max_concurrency: int = Field(
+        default=1, ge=1, le=16, validation_alias="ISE_MNT_GATE_MAX_CONCURRENCY"
     )
     # Minimum seconds between the START of consecutive AuthList downloads.
     # Proactively spaces large MnT downloads (SST's manual-delay finding).
     # Default 0.0 = off; a call arriving sooner rejects fast with ISE_BUSY.
-    authlist_min_interval_s: float = Field(
-        default=0.0, ge=0.0, validation_alias="ISE_AUTHLIST_MIN_INTERVAL_S"
+    mnt_gate_min_interval_s: float = Field(
+        default=0.0, ge=0.0, validation_alias="ISE_MNT_GATE_MIN_INTERVAL_S"
     )
     # Adaptive breaker base backoff (seconds). The open window doubles per
     # consecutive MnT distress signal, starting from this value.
-    authlist_backoff_base_s: float = Field(
-        default=5.0, gt=0.0, validation_alias="ISE_AUTHLIST_BACKOFF_BASE_S"
+    mnt_gate_backoff_base_s: float = Field(
+        default=5.0, gt=0.0, validation_alias="ISE_MNT_GATE_BACKOFF_BASE_S"
     )
     # Adaptive breaker max backoff (seconds); caps the doubling window.
-    authlist_backoff_max_s: float = Field(
-        default=300.0, gt=0.0, validation_alias="ISE_AUTHLIST_BACKOFF_MAX_S"
+    mnt_gate_backoff_max_s: float = Field(
+        default=300.0, gt=0.0, validation_alias="ISE_MNT_GATE_BACKOFF_MAX_S"
     )
 
     # Inbound MCP header carrying the end-user's pre-built

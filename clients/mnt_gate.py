@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Admission control for heavy ISE MnT AuthList downloads.
+"""Admission control for heavy ISE MnT reads (AuthList downloads, dashboard summary).
 
 Three layers, all configurable via ``clients.settings.settings``:
 
@@ -36,7 +36,7 @@ from models.error_models import ErrorCategory, raise_tool_error
 _DISTRESS_STATUSES = frozenset({502, 503, 504})
 
 
-class AuthListGate:
+class MntGate:
     def __init__(
         self,
         max_concurrency: int,
@@ -62,12 +62,12 @@ class AuthListGate:
         self._probing = False  # a half-open probe is currently in flight
 
     @classmethod
-    def from_settings(cls) -> "AuthListGate":
+    def from_settings(cls) -> "MntGate":
         return cls(
-            max_concurrency=settings.authlist_max_concurrency,
-            min_interval_s=settings.authlist_min_interval_s,
-            backoff_base_s=settings.authlist_backoff_base_s,
-            backoff_max_s=settings.authlist_backoff_max_s,
+            max_concurrency=settings.mnt_gate_max_concurrency,
+            min_interval_s=settings.mnt_gate_min_interval_s,
+            backoff_base_s=settings.mnt_gate_backoff_base_s,
+            backoff_max_s=settings.mnt_gate_backoff_max_s,
         )
 
     def _reject(self, reason: str) -> None:
@@ -75,8 +75,8 @@ class AuthListGate:
         raise_tool_error(
             ErrorCategory.EXTERNAL_ERROR,
             "ISE_BUSY",
-            "The ISE session service is busy (another large query is in "
-            "progress or the MnT node is under load). Retry shortly.",
+            "The ISE MnT node is busy (another large query is in progress or "
+            "the node is under load). Retry shortly.",
             retry=True,
         )
 
@@ -166,4 +166,4 @@ class AuthListGate:
             self._sem.release()
 
 
-auth_list_gate = AuthListGate.from_settings()
+mnt_gate = MntGate.from_settings()
