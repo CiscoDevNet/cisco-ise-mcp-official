@@ -7,9 +7,14 @@
 Pure and testable: no I/O. Consumes the dict produced by
 ``utils.xml_parser.iter_parse_system_summary`` and returns a per-node summary of
 process states (running / disabled / initializing / down / not_monitored), the
-list of processes that are down (code 0 only), the ISE-reported top-level status
-verbatim, and min/max/avg/latest aggregates of the 60-minute
-CPU / memory / latency series.
+list of processes that are down (code 0 only), and min/max/avg/latest aggregates
+of the 60-minute CPU / memory / latency series.
+
+The top-level ``<status>``/``<message>`` elements are intentionally NOT surfaced:
+that endpoint's JAXB field-access serialization emits a default "Failed" because
+the response is built without invoking the getter that would flip it to
+"Passed", so the value is a fixed artifact, not a health verdict. The real
+verdict comes only from the per-service integer codes (any 0 = down).
 
 Process-status code semantics (confirmed against the ``70001 System-Stats: ISE
 Process Health`` log line): 0=down (the only fault), 1=running, 2=disabled,
@@ -52,7 +57,6 @@ def _aggregate(values: List[float]) -> Dict[str, float]:
 
 def _blank_node() -> Dict[str, Any]:
     return {
-        "reported_status": None,
         "processes_down": [],
         "processes": {},
         "cpu_percent": None,
@@ -80,7 +84,6 @@ class SystemSummaryParser:
                 if state == "down":
                     processes_down.append(field)
             node = _blank_node()
-            node["reported_status"] = row.get("status")
             node["processes_down"] = processes_down
             node["processes"] = processes
             nodes[server] = node

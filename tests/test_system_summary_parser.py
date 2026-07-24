@@ -61,11 +61,6 @@ def test_processes_down_lists_only_code_zero():
     assert out["vm218"]["processes_down"] == ["database"]
 
 
-def test_reported_status_surfaced_verbatim():
-    out = SystemSummaryParser().build(_parsed())
-    assert out["vm218"]["reported_status"] == "Failed"
-
-
 def test_metric_aggregation():
     out = SystemSummaryParser().build(_parsed())
     cpu = out["vm218"]["cpu_percent"]
