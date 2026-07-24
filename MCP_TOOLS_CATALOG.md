@@ -19,13 +19,13 @@ This document provides a comprehensive reference for all MCP tools exposed by th
 
 Tools for monitoring and searching authenticated network sessions from the past X minutes.
 
-**Backpressure (`ISE_BUSY`):** The four session tools below download all sessions in the requested window from the ISE MnT node. Only one download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Four env tunables control concurrency and backoff: `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1), `ISE_AUTHLIST_MIN_INTERVAL_S` (default 0.0), `ISE_AUTHLIST_BACKOFF_BASE_S` (default 5.0), `ISE_AUTHLIST_BACKOFF_MAX_S` (default 300.0). See the [README Session tools section](README.md#session-tools-resource-usage--backpressure) for the full table and guidance.
+**Backpressure (`ISE_BUSY`):** The four session tools below download all sessions in the requested window from the ISE MnT node. Only one download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Four env tunables control concurrency and backoff: `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1), `ISE_MNT_GATE_MIN_INTERVAL_S` (default 0.0), `ISE_MNT_GATE_BACKOFF_BASE_S` (default 5.0), `ISE_MNT_GATE_BACKOFF_MAX_S` (default 300.0). See the [README Session tools section](README.md#session-tools-resource-usage--backpressure) for the full table and guidance.
 
 ### active_sessions_search
 
 Fast, lightweight session search. Returns basic identifiers only (user, MAC, IPs, ISE node) for sessions authenticated in the past X minutes. Up to 20 results.
 
-**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `sessions_search_with_advanced_details` when you also need authorization profiles, posture, or auth method details.
 Use `sessions_search_with_policy_details` when you need full policy rule definitions explaining why sessions were authorized.
@@ -170,7 +170,7 @@ Use `sessions_search_with_policy_details` when you need full policy rule definit
 
 Session search enriched with WHAT happened: authorization profile, auth method, posture status, identity group, network device name, identity store, response time, and matched policy/rule names. Combines the AuthList API (session list) with the Last Session by Attributes API (detail per session). Slower than `active_sessions_search` (extra API call per session). limit default 1, max 10.
 
-**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_policy_details` for full policy rule definitions.
@@ -281,7 +281,7 @@ Use `sessions_search_with_policy_details` for full policy rule definitions.
 
 Session search enriched with WHY it was authorized: resolves full policy set, authentication rule, and authorization rule definitions from the ISE Policy API. Combines the AuthList API, the Last Session by Attributes API, and the Policy API. Slowest tool (multiple API calls per session). Caches duplicate policy lookups across sessions. limit default 1, max 10.
 
-**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_advanced_details` for auth profiles/posture only.
@@ -449,7 +449,7 @@ Use `sessions_search_with_advanced_details` for auth profiles/posture only.
 
 Session search enriched with per-step latency breakdown: resolves each ISE authentication execution step code into its human-readable message and attaches the latency (ms) for each step. Combines the AuthList API (session list), the Last Session by Attributes API (detail per session), and the ISE message catalog (step code resolution). Supports filtering by total response time range. limit default 1, max 10.
 
-**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_advanced_details` for auth profiles/posture only.
@@ -802,13 +802,13 @@ Use `ise_search_policy_sets` to discover policy set names to pass via `policy_se
 
 ## Deployment Health
 
-Read-only tool for inspecting the Cisco ISE deployment itself — node inventory, personas/roles, services, node status, PAN redundancy/HA readiness, and an overall health verdict. Sourced from the ISE Deployment API (`GET /api/v1/deployment/node`), with optional log-derived per-node system statistics.
+Read-only tool for inspecting the Cisco ISE deployment itself — node inventory, personas/roles, services, node status, PAN redundancy/HA readiness, and an overall health verdict. Sourced from the ISE Deployment API (`GET /api/v1/deployment/node`), with opt-in API-sourced per-node process health and CPU/memory/latency (`diagnostics=true`).
 
 ### ise_deployment_health
 
 Returns Cisco ISE deployment topology and node-level deployment health. Use it for questions about the cluster/deployment itself: which nodes exist, which node is Primary/Secondary PAN, which nodes provide MnT, PSN/Session, Profiler, Device Admin, SXP, TC-NAC, PassiveID, or pxGrid services, whether nodes are Connected / Disconnected / out of sync / registration-failed / replication-stopped / not-upgraded, and whether the deployment is healthy, degraded, or critical.
 
-Set `deep_diagnostics=true` only when the user's wording signals a problem or explicitly asks to investigate/diagnose (e.g. "down", "broken", "not syncing", "out of sync", "registration failed", "overloaded", "investigate", "diagnose"). Deep diagnostics is heavier and slower because it reads log-derived system data (CPU, memory, disk, replication/process indicators). For general status, topology, readiness, HA, or plain "is it healthy?" questions, keep it false.
+Set `diagnostics=true` only when the user's wording signals a problem or explicitly asks to investigate/diagnose (e.g. "down", "broken", "not syncing", "out of sync", "registration failed", "overloaded", "investigate", "diagnose"). Diagnostics fetch per-node process health and CPU/memory/latency from the MnT `getSystemSummaryDetails` API — one call, but the response can be large in big deployments, and it is gated for MnT-node backpressure (may return an `{status: "unavailable"}` block under load). For general status, topology, readiness, HA, or plain "is it healthy?" questions, keep it false.
 
 When `hostnames` is set the result describes ONLY the named nodes (`scope: "filtered"`) and cannot support deployment-wide conclusions (PAN redundancy, HA readiness, whether a Secondary PAN exists) — re-run without `hostnames` to assess HA.
 
@@ -825,12 +825,13 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
 - "Show me the ISE cluster topology."
 - "Is this a standalone or distributed ISE deployment?"
 - "Which nodes are unhealthy before an upgrade or maintenance window?"
+- "Which ISE processes are down on a node?" (with `diagnostics=true`)
 
 
 | Parameter          | Type            | Required | Default | Description                                                                                                                                                                                     |
 | ------------------ | --------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hostnames`        | array\[string]  | No       | None    | Exact ISE node hostnames to include (OR-matched). Omit for cluster-wide health, topology, redundancy, or readiness questions. A filtered result describes ONLY the named nodes and cannot support deployment-wide HA/redundancy conclusions. |
-| `deep_diagnostics` | boolean         | No       | false   | When true, also gather log-derived per-node system statistics (CPU, memory, disk, replication/process indicators). Set true only when wording signals a problem or asks to investigate/diagnose. |
+| `diagnostics` | boolean         | No       | false   | When true, attach API-backed per-node diagnostics (process health + CPU/memory/latency from the MnT `getSystemSummaryDetails` API). Opt-in: the response can be large and the call is gated for MnT backpressure. Set true only when wording signals a problem or asks to investigate/diagnose. |
 
 
 **Returns:** JSON object with:
@@ -853,9 +854,9 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
   - `not_found_hostnames`: Requested hostnames matching no node (present only for `filtered` scope when applicable)
   - `scope_note`: Present only for `filtered` scope; explains deployment-wide conclusions cannot be drawn
   - `verdict`: `healthy`, `degraded`, or `critical`
-- `diagnostics`: Present only when `deep_diagnostics=true`, otherwise omitted:
-  - `observations`: Human-readable derived observations about node health (including replication/process signals)
-  - `system_stats`: Log-derived per-node system statistics: top-level `anchor`, `duration_minutes`, and `nodes` (keyed by hostname). Each node is either `{status: "ok", window: {start, end}, sample_count, cpu_percent, memory_percent, disk_percent}` (each metric a `{min, max, avg, latest}` object) or `{status: "unavailable", reason}`.
+- `diagnostics`: Present only when `diagnostics=true`, otherwise omitted:
+  - `observations`: Human-readable derived observations about node health (node status, PAN redundancy, and any processes reporting "down").
+  - `system_stats`: Per-node system statistics from the MnT `getSystemSummaryDetails` API: top-level `source` (`"getSystemSummaryDetails"`), `duration_minutes` (60), and `nodes` (keyed by hostname). Each node has `reported_status` (the ISE-reported summary status, informational), `processes_down` (process names reporting not-running), `processes` (map of process name → `running` / `disabled` / `not_applicable` / `down` / `unknown:<n>`), and `cpu_percent` / `memory_percent` / `latency` (each a `{min, max, avg, latest}` object, or null when no samples). If the MnT node is busy or the call/parse fails, `system_stats` is `{status: "unavailable", reason}` instead (the base summary is unaffected).
 
 **Use when:**
 
@@ -863,7 +864,7 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
 - Checking PAN redundancy or HA readiness before an upgrade or maintenance window
 - Identifying which nodes are unhealthy (not Connected) across the deployment
 - Determining which node holds a given persona (PrimaryAdmin, MnT, PSN, etc.)
-- Investigating replication or node-status problems (with `deep_diagnostics=true`)
+- Investigating replication or node-status problems, or which processes are down on a node (with `diagnostics=true`)
 
 **Do not use when:**
 
@@ -875,7 +876,7 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
 **Best practices:**
 
 - Omit `hostnames` for any deployment-wide HA/redundancy/topology question; only filter when the user asks about specific nodes
-- Keep `deep_diagnostics=false` for status/readiness checks; enable it only when a problem is signaled
+- Keep `diagnostics=false` for status/readiness checks; enable it only when a problem is signaled (it is a gated heavy MnT call)
 - A `filtered` result omits `primary_admin_present` / `secondary_admin_present` / `ha_ready` — re-run without `hostnames` to assess HA
 
 ---
@@ -994,7 +995,7 @@ Set `scan_logs=false` for a quick "are any certs expiring?" check. Keep it true 
 | "Do I have Primary/Secondary PAN redundancy (HA)?"      | `ise_deployment_health`                     |
 | "Which ISE nodes are down / out of sync / not upgraded?"| `ise_deployment_health`                     |
 | "Which node is PrimaryAdmin / MnT / a PSN?"             | `ise_deployment_health`                     |
-| "Investigate why a node is disconnected / not syncing"  | `ise_deployment_health` (deep_diagnostics=true) |
+| "Investigate why a node is disconnected / not syncing"  | `ise_deployment_health` (diagnostics=true) |
 | "Are any ISE certificates expired or expiring soon?"    | `ise_diagnose_certificate_issues`           |
 | "Are there certificate/TLS (Unknown CA, PKIX) errors?"  | `ise_diagnose_certificate_issues`           |
 | "Quick check: any certs expiring in the next N days?"   | `ise_diagnose_certificate_issues` (scan_logs=false) |
@@ -1012,7 +1013,7 @@ Set `scan_logs=false` for a quick "are any certs expiring?" check. Keep it true 
 | Sessions with Latency Details | ISE MNT API (AuthList, Last Session by Attributes) + ISE Message Catalog (execution step code-to-text resolution)                                                                                                                   |
 | AAA Failure Investigation     | ISE MNT API (AuthStatus, Last Session by Attributes, FailureReasons) + ISE Message Catalog                                                                                                                                          |
 | Policy Configuration          | ISE Policy API (Network Access): policy sets, authentication rules, authorization rules, global exception rules |
-| Deployment Health             | ISE Deployment API (`GET /api/v1/deployment/node`) + log-derived per-node system statistics (deep diagnostics)                                                                                                                       |
+| Deployment Health             | ISE Deployment API (`GET /api/v1/deployment/node`) + MnT API `getSystemSummaryDetails` (diagnostics=true)                                                                                                                       |
 | Certificates                  | ISE Certificate/Trusted-Certificate API (expiry) + PSN `ise-psc.log` scan (certificate/TLS error signals)                                                                                                                           |
 
 
