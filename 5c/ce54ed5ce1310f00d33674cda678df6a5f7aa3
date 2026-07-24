@@ -1,0 +1,41 @@
+tests/test_session_tools.py
+  s_33e0452a52e371::t_c7fcbe13801a16 310,319,336
+clients/settings.py
+  s_33e0452a52e371::t_52fa0cdb656336 60-61
+  s_33e0452a52e371::t_ff6df0b37524f4 82-83,88-89,93-94,97-98
+README.md
+  s_33e0452a52e371::t_dc6a08b5d6aa18 326-329
+.env.example
+  s_33e0452a52e371::t_28c55fc6e0d31e 28-31
+tests/test_mnt_gate.py
+  s_33e0452a52e371::t_4129a5b57b0136 31-33
+tests/test_settings_log_fields.py
+  s_33e0452a52e371::t_b74be62cb73032 40,43-46,54-57,60,62-65,70-73
+clients/mnt_gate.py
+  s_33e0452a52e371::t_5703d5fa47b2af 65-70
+  s_33e0452a52e371::t_54a47e05fe57f1 169
+  s_33e0452a52e371::t_8e3296c547ab66 39
+  s_33e0452a52e371::t_1f50ee233426e6 5
+  s_33e0452a52e371::t_67d225bc9b48ec 78-79
+tools/session_tool_handler.py
+  s_33e0452a52e371::t_b2ccdd0324f3fd 15
+  s_33e0452a52e371::t_51448b90dea760 109
+  s_33e0452a52e371::t_62baef9989b207 45
+  s_33e0452a52e371::t_9e8678e5f8a9ab 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5cce54ed5ce1310f00d33674cda678df6a5f7aa3",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
