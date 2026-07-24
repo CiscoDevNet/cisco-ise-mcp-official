@@ -1,0 +1,30 @@
+tests/test_deployment_tool_handler.py
+  s_33e0452a52e371::t_bb1e3a272d8c4a 127,129,133,138-144
+  s_33e0452a52e371::t_811316fbc58bd3 30,36-67
+  s_33e0452a52e371::t_22310d5d1aa7f2 145
+models/deployment_models.py
+  s_33e0452a52e371::t_356b152bda8a2c 227
+  s_33e0452a52e371::t_5a91640164bc11 203,205-206
+  s_33e0452a52e371::t_3e9aca80209543 215-217
+tools/deployment_tool_handler.py
+  s_33e0452a52e371::t_972cfdacce9992 82-84
+  s_33e0452a52e371::t_44b1daf98469b8 96
+  s_33e0452a52e371::t_40f96939ca6dfc 64
+  s_33e0452a52e371::t_2db68c2551153d 37,44-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "09d7d0aff4370c5680032845fae576cc1bc6834e",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
