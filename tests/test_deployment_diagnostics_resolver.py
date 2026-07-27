@@ -156,7 +156,6 @@ class TestSystemStats:
         result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
         assert result.system_stats["duration_minutes"] == 60
         assert set(result.system_stats["nodes"].keys()) == {"vm218", "vm219"}
-        assert result.system_stats["nodes"]["vm218"]["processes_down"] == ["Database Server"]
         assert result.system_stats["nodes"]["vm218"]["cpu_percent"]["latest"] == 4.0
 
     @pytest.mark.asyncio
@@ -186,11 +185,8 @@ class TestSystemStats:
 """
         nodes = [_node("vm218", ["PrimaryAdmin"])]
         result = await _resolver(_mnt_streaming(xml)).resolve(nodes)
-        # Every down process is listed in the node's processes_down and in the
-        # single per-node observation, not just the first.
-        assert result.system_stats["nodes"]["vm218"]["processes_down"] == [
-            "Application Server", "Database Server", "SXP Engine Service",
-        ]
+        # Every down process is listed in the single per-node observation, not
+        # just the first.
         obs = [o for o in result.observations if "not running" in o]
         assert len(obs) == 1
         for name in ("Application Server", "Database Server", "SXP Engine Service"):

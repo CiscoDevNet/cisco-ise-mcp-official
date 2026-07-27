@@ -856,7 +856,7 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
   - `verdict`: `healthy`, `degraded`, or `critical`
 - `diagnostics`: Present only when `diagnostics=true`, otherwise omitted:
   - `observations`: Human-readable derived observations about node health (node status, PAN redundancy, and any processes reporting "down").
-  - `system_stats`: Per-node system statistics from the MnT `getSystemSummaryDetails` API: top-level `duration_minutes` (60) and `nodes` (keyed by hostname). Each node has `processes_down` (human-readable names of processes reporting down; empty means all processes are running as expected) and `cpu_percent` / `memory_percent` / `latency` (each a `{min, max, avg, latest}` object, or null when no samples). If the MnT node is busy or the call/parse fails, `system_stats` is `{status: "unavailable", reason}` instead (the base summary is unaffected).
+  - `system_stats`: Per-node system statistics from the MnT `getSystemSummaryDetails` API: top-level `duration_minutes` (60) and `nodes` (keyed by hostname). Each node has `cpu_percent` / `memory_percent` / `latency` (each a `{min, max, avg, latest}` object, or null when no samples). Down processes are not in this block; they are reported in `observations` as `"<host>: process(es) not running: ..."`. If the MnT node is busy or the call/parse fails, `system_stats` is `{status: "unavailable", reason}` instead (the base summary is unaffected).
 
 **Use when:**
 

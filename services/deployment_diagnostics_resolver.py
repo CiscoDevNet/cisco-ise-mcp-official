@@ -5,9 +5,12 @@
 """Derive deployment diagnostics from the node list and the MnT dashboard API.
 
 Produces human-readable observations derived from node status and roles, plus
-per-node system statistics (process health and CPU/memory/latency) fetched in a
-single call to the MnT ``getSystemSummaryDetails`` endpoint. The call covers all
-nodes at once; results are filtered to the hostnames in the caller's node list.
+per-node system statistics (CPU/memory/latency) fetched in a single call to the
+MnT ``getSystemSummaryDetails`` endpoint. The call covers all nodes at once;
+results are filtered to the hostnames in the caller's node list. Down processes
+are reported only as an observation ("process(es) not running: ..."); the
+structured ``processes_down`` list is dropped from ``system_stats`` to avoid
+duplicating the same information as both prose and data.
 
 The response is read with a streaming, memory-bounded parse (the AuthList
 pattern: ``get_stream`` -> spooled temp file -> ``iterparse`` off the event loop)
@@ -100,7 +103,9 @@ class DeploymentDiagnosticsResolver:
 
         observations: list[str] = []
         for hostname, data in scoped_nodes.items():
-            down = data.get("processes_down") or []
+            # Down processes are surfaced as a human-readable observation, so
+            # the structured key is redundant in the payload — pop it out.
+            down = data.pop("processes_down", None) or []
             if down:
                 observations.append(
                     f"{hostname}: process(es) not running: {', '.join(down)}."
