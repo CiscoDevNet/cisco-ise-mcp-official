@@ -4,7 +4,6 @@
 
 import asyncio
 import re
-from contextlib import asynccontextmanager
 from typing import Optional, Tuple
 
 import httpx
@@ -540,36 +539,6 @@ class MNTClient:
         except httpx.RequestError as e:
             logger.error("MNT request error", error=str(e))
             raise
-
-    @asynccontextmanager
-    async def get_stream(self, endpoint: str):
-        """Stream a GET from the MNT API without buffering the whole body.
-
-        Mirrors ``get()`` (endpoint validation, one-time FQDN discovery,
-        per-call auth selection, URL-under-base assertion) but opens an
-        httpx streaming response so the caller can consume the body
-        incrementally via ``response.aiter_bytes()``. ``raise_for_status``
-        runs on the response headers before yielding, so HTTP errors
-        (e.g. 502) surface to the caller/gate before any body is read.
-        """
-        validate_endpoint(endpoint)
-        client = await self._get_client()
-        await self._ensure_mnt_target()
-
-        url = f"{self.base_url}{endpoint}"
-        assert_url_under_base(url, self.base_url)
-
-        per_call_kwargs, auth_path = self._resolve_per_call_auth()
-        logger.info(
-            "MNT API GET (stream)",
-            url=url,
-            auth_path=auth_path,
-            mnt_fqdn_pinned=bool(self._mnt_fqdn),
-        )
-        async with client.stream("GET", url, **per_call_kwargs) as response:
-            response.raise_for_status()
-            logger.info("MNT API stream response", status_code=response.status_code, url=url)
-            yield response
 
     async def close(self) -> None:
         """Close the HTTP client connection."""

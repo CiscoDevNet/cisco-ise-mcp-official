@@ -4,7 +4,6 @@
 
 """Tests for session-related tools: xml_parser (sessionParameters), session_models, session_tool_handler."""
 
-import io
 import json
 import sys
 from pathlib import Path
@@ -212,39 +211,19 @@ class TestFetchAuthListSessions:
     </activeList>"""
 
     def _make_handler(self, xml_text):
-        import contextlib
-        from unittest.mock import AsyncMock
         from tools.session_tool_handler import SessionToolHandler
 
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            self._last_endpoint = endpoint
-            yield FakeResponse(xml_text.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        import contextlib as _c
-        class _PassGate:
-            @_c.asynccontextmanager
-            async def guard(self):
-                yield
-        return SessionToolHandler(mock_client, gate=_PassGate()), mock_client
+        resp = Mock()
+        resp.text = xml_text
+        mock_client.get = AsyncMock(return_value=resp)
+        return SessionToolHandler(mock_client), mock_client
 
     @pytest.mark.asyncio
     async def test_returns_parsed_sessions(self):
         handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
-        sessions, total = await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
-        assert total == 2
+
+        sessions = await handler._fetch_auth_list_sessions(minutes=60)
         assert len(sessions) == 2
         assert sessions[0].user_name == "alice"
         assert sessions[1].user_name == "bob"
@@ -252,14 +231,17 @@ class TestFetchAuthListSessions:
     @pytest.mark.asyncio
     async def test_empty_list_returns_empty(self):
         handler, _ = self._make_handler(self.EMPTY_LIST_XML)
-        sessions, total = await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
+
+        sessions = await handler._fetch_auth_list_sessions(minutes=60)
         assert sessions == []
-        assert total == 0
 
     @pytest.mark.asyncio
     async def test_session_missing_optional_fields_does_not_raise(self):
+        """A session missing nas_ip_address/calling_station_id must not fail
+        the whole list (real ISE returns partially-populated sessions)."""
         handler, _ = self._make_handler(self.PARTIAL_SESSION_XML)
-        sessions, total = await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
+
+        sessions = await handler._fetch_auth_list_sessions(minutes=60)
         assert len(sessions) == 1
         assert sessions[0].user_name == "test19"
         assert sessions[0].nas_ip_address is None
@@ -268,101 +250,67 @@ class TestFetchAuthListSessions:
 
     @pytest.mark.asyncio
     async def test_endpoint_uses_authlist_with_null_end_time(self):
-        handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
-        await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
-        assert self._last_endpoint.startswith("Session/AuthList/")
-        assert self._last_endpoint.endswith("/null")
+        handler, mock_client = self._make_handler(self.ACTIVE_LIST_XML)
+
+        await handler._fetch_auth_list_sessions(minutes=60)
+
+        endpoint = mock_client.get.call_args[0][0]
+        assert endpoint.startswith("Session/AuthList/")
+        # End time is the literal string 'null'
+        assert endpoint.endswith("/null")
 
     @pytest.mark.asyncio
-    async def test_endpoint_encodes_start_time_from_now_minus_minutes(self):
-        # The start time is url-quoted with safe=":", so the space between
-        # date and time becomes %20 while the H:M:S colons are preserved.
-        import re
+    async def test_endpoint_encodes_start_time_from_now_minus_minutes(self, monkeypatch):
+        """Start time is now - minutes, formatted and URL-quoted (space ->
+        %20, colons preserved)."""
+        from datetime import datetime as real_datetime, timedelta
+        import tools.session_tool_handler as sth
 
-        handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
-        await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
-        # e.g. "Session/AuthList/2026-06-04%2011:30:00/null"
-        assert re.fullmatch(
-            r"Session/AuthList/\d{4}-\d{2}-\d{2}%20\d{2}:\d{2}:\d{2}/null",
-            self._last_endpoint,
-        ), self._last_endpoint
-        assert " " not in self._last_endpoint  # no raw (unencoded) space
+        fixed_now = real_datetime(2026, 6, 4, 12, 0, 0)
+
+        class _FrozenDateTime(real_datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed_now
+
+        monkeypatch.setattr(sth, "datetime", _FrozenDateTime)
+
+        handler, mock_client = self._make_handler(self.ACTIVE_LIST_XML)
+        await handler._fetch_auth_list_sessions(minutes=30)
+
+        endpoint = mock_client.get.call_args[0][0]
+        # 12:00:00 - 30 minutes -> 11:30:00 on 2026-06-04
+        assert endpoint == "Session/AuthList/2026-06-04%2011:30:00/null"
 
     @pytest.mark.asyncio
     async def test_invalid_minutes_raises_before_io(self):
         from fastmcp.exceptions import ToolError as McpToolError
-        handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
-        with pytest.raises(McpToolError):
-            await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=0)
+
+        handler, mock_client = self._make_handler(self.ACTIVE_LIST_XML)
+        with pytest.raises(McpToolError) as exc_info:
+            await handler._fetch_auth_list_sessions(minutes=0)
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "INVALID_MINUTES"
+        mock_client.get.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_retention_cap_bounds_sample_but_not_total(self):
-        handler, _ = self._make_handler(self.ACTIVE_LIST_XML)
-        sessions, total = await handler._fetch_auth_list_sessions(filters={}, retention_cap=1, minutes=60)
-        assert total == 2
-        assert len(sessions) == 1
-
-
-class TestFetchAuthListGateIntegration:
-    """A streamed MnT distress status must open the REAL gate's breaker.
-
-    Unlike TestFetchAuthListSessions (which injects a pass-through gate),
-    this wires a real AuthListGate so the distress signal from get_stream's
-    raise_for_status propagates through guard() and records a failure --
-    verifying the handler->gate->breaker seam end to end.
-    """
-
-    def _make_handler(self, status_code):
-        import contextlib
-        from unittest.mock import AsyncMock
-        import httpx
-        from clients.auth_list_gate import AuthListGate
-        from tools.session_tool_handler import SessionToolHandler
-
-        request = httpx.Request("GET", "https://ise/admin/API/mnt/Session/AuthList/x/null")
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            resp = httpx.Response(status_code, request=request)
-            # get_stream calls raise_for_status() before yielding; mirror that
-            # so a distress status raises inside the gate's guard() body.
-            resp.raise_for_status()
-            yield resp  # unreachable for a distress status
-
-        mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # Real gate, deterministic clock/jitter, breaker window well above 0.
-        gate = AuthListGate(
-            max_concurrency=1,
-            min_interval_s=0.0,
-            backoff_base_s=5.0,
-            backoff_max_s=300.0,
-            time_fn=lambda: 1000.0,
-            jitter_fn=lambda: 0.0,
-        )
-        return SessionToolHandler(mock_client, gate=gate), gate
-
-    @pytest.mark.asyncio
-    async def test_streamed_503_opens_breaker_and_next_call_rejects(self):
-        import httpx
+    async def test_minutes_above_max_raises_before_io(self):
         from fastmcp.exceptions import ToolError as McpToolError
 
-        handler, gate = self._make_handler(503)
+        handler, mock_client = self._make_handler(self.ACTIVE_LIST_XML)
+        with pytest.raises(McpToolError) as exc_info:
+            await handler._fetch_auth_list_sessions(minutes=99999)
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "INVALID_MINUTES"
+        mock_client.get.assert_not_called()
 
-        # First call: the 503 surfaces as an HTTPStatusError through the gate.
-        with pytest.raises(httpx.HTTPStatusError):
-            await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
-
-        # The gate recorded the distress and opened its breaker.
-        assert gate._consecutive_failures == 1
-        assert gate._breaker_open_until == 1000.0 + 5.0  # base window, zero jitter
-
-        # A subsequent call is rejected fast with ISE_BUSY (breaker open),
-        # without ever reaching the stream.
-        with pytest.raises(McpToolError) as ei:
-            await handler._fetch_auth_list_sessions(filters={}, retention_cap=10, minutes=60)
-        assert "ISE_BUSY" in str(ei.value)
+    @pytest.mark.asyncio
+    async def test_default_minutes_is_within_bounds(self):
+        """The default (1440) is the documented max and must not be rejected."""
+        handler, mock_client = self._make_handler(self.ACTIVE_LIST_XML)
+        sessions = await handler._fetch_auth_list_sessions()
+        assert len(sessions) == 2
+        mock_client.get.assert_called_once()
 
 
 class TestSessionToolHandlerSearchActiveSessions:
@@ -387,31 +335,13 @@ class TestSessionToolHandlerSearchActiveSessions:
     </activeList>"""
 
     def _make_handler(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(self.ACTIVE_LIST_XML.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        import contextlib as _c
-        class _PassGate:
-            @_c.asynccontextmanager
-            async def guard(self):
-                yield
-        return SessionToolHandler(mock_client, gate=_PassGate())
+        resp = Mock()
+        resp.text = self.ACTIVE_LIST_XML
+        mock_client.get = AsyncMock(return_value=resp)
+        return SessionToolHandler(mock_client)
 
     @pytest.mark.asyncio
     async def test_minutes_above_max_rejected(self):
@@ -446,6 +376,7 @@ class TestSessionToolHandlerSearchActiveSessions:
         data = json.loads(str(exc_info.value))
         assert data["error_code"] == "INVALID_MINUTES"
         assert "1 minute" in data["message"]
+        handler.mnt_client.get.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_limit_above_200_rejected(self):
@@ -536,25 +467,13 @@ class TestSessionToolHandlerSearchActiveSessions:
 
     @pytest.mark.asyncio
     async def test_ise_api_timeout_returns_structured_error(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
         from fastmcp.exceptions import ToolError as McpToolError
         import httpx
 
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            raise httpx.ConnectError("connection refused")
-            yield  # unreachable but required for generator
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # A pass-through gate
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        handler = SessionToolHandler(mock_client)
 
         with pytest.raises(McpToolError) as exc_info:
             await handler.search_active_sessions()
@@ -565,26 +484,14 @@ class TestSessionToolHandlerSearchActiveSessions:
 
     @pytest.mark.asyncio
     async def test_ise_api_500_returns_structured_error(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
         from fastmcp.exceptions import ToolError as McpToolError
         import httpx
 
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            response = httpx.Response(500, request=httpx.Request("GET", "http://test"))
-            raise httpx.HTTPStatusError("", request=response.request, response=response)
-            yield  # unreachable but required for generator
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # A pass-through gate
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        response = httpx.Response(500, request=httpx.Request("GET", "http://test"))
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPStatusError("", request=response.request, response=response))
+        handler = SessionToolHandler(mock_client)
 
         with pytest.raises(McpToolError) as exc_info:
             await handler.search_active_sessions()
@@ -600,7 +507,6 @@ class TestSessionToolHandlerSearchEnriched:
 
     @pytest.mark.asyncio
     async def test_search_enriched_calls_authlist_then_enriches(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         # API 1 response: one active session
@@ -616,25 +522,16 @@ class TestSessionToolHandlerSearchEnriched:
             </activeSession>
         </activeList>"""
 
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_list_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
         call_count = 0
 
         async def mock_get(endpoint):
             nonlocal call_count
             call_count += 1
+            if "AuthList" in endpoint:
+                r = Mock()
+                r.text = active_list_xml
+                return r
             if "SessionID" in endpoint or "MACAddress" in endpoint:
                 r = Mock()
                 r.text = SAMPLE_SESSION_PARAMS_XML
@@ -642,13 +539,7 @@ class TestSessionToolHandlerSearchEnriched:
             raise ValueError(f"Unexpected endpoint: {endpoint}")
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(minutes=1440, limit=2)
         assert result.total_sessions_found == 1
@@ -656,20 +547,14 @@ class TestSessionToolHandlerSearchEnriched:
         assert len(result.sessions) == 1
         assert result.sessions[0].user_name == "iseAiUser"
         assert result.sessions[0].authorization_profiles == "PermitAccess"
-        assert call_count == 1
+        assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_search_enriched_limit_above_10_rejected(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
         from fastmcp.exceptions import ToolError as McpToolError
 
-        # A pass-through gate
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(AsyncMock(), gate=_PassGate())
+        handler = SessionToolHandler(AsyncMock())
         with pytest.raises(McpToolError) as exc_info:
             await handler.search_enriched_active_sessions(minutes=1440, limit=11)
         data = json.loads(str(exc_info.value))
@@ -694,37 +579,20 @@ class TestSessionToolHandlerSearchEnriched:
     </activeList>"""
 
     def _make_enriched_handler(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(self.ACTIVE_LIST_2_XML.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             r = Mock()
-            r.text = SAMPLE_SESSION_PARAMS_XML
+            if "AuthList" in endpoint:
+                r.text = self.ACTIVE_LIST_2_XML
+            else:
+                r.text = SAMPLE_SESSION_PARAMS_XML
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        return SessionToolHandler(mock_client, gate=_PassGate())
+        return SessionToolHandler(mock_client)
 
     @pytest.mark.asyncio
     async def test_enriched_minutes_above_max_rejected(self):
@@ -758,25 +626,13 @@ class TestSessionToolHandlerSearchEnriched:
 
     @pytest.mark.asyncio
     async def test_enriched_api_timeout_returns_structured_error(self):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
         from fastmcp.exceptions import ToolError as McpToolError
         import httpx
 
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            raise httpx.ConnectError("refused")
-            yield  # unreachable but required for generator
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
-
-        # A pass-through gate
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("refused"))
+        handler = SessionToolHandler(mock_client)
 
         with pytest.raises(McpToolError) as exc_info:
             await handler.search_enriched_active_sessions()
@@ -788,39 +644,22 @@ class TestSessionToolHandlerSearchEnriched:
     @pytest.mark.asyncio
     async def test_enriched_partial_enrichment_failure(self):
         """If enrichment fails for one session (all fallbacks), it is omitted."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(self.ACTIVE_LIST_2_XML.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
+            r = Mock()
+            if "AuthList" in endpoint:
+                r.text = self.ACTIVE_LIST_2_XML
+                return r
             if "AA:BB:CC:DD:EE:01" in endpoint or "alice" in endpoint:
                 raise ConnectionError("enrichment failed")
-            r = Mock()
             r.text = SAMPLE_SESSION_PARAMS_XML
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(limit=2)
         assert result.total_sessions_found == 2
@@ -874,40 +713,22 @@ class TestEnrichedLatencyFiltering:
         )
 
     def _make_handler(self, n_sessions, response_time=100):
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         active_xml = self._active_list_xml(n_sessions)
         detail_xml = self._session_detail_xml(response_time)
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        return SessionToolHandler(mock_client, gate=_PassGate())
+        return SessionToolHandler(mock_client)
 
     # ---- (1) Latency range validation errors ----
 
@@ -996,40 +817,22 @@ class TestEnrichedLatencyFiltering:
     @pytest.mark.asyncio
     async def test_none_response_time_excluded_when_latency_filter_active(self):
         """Sessions with response_time_ms=None are dropped when any latency filter is set."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         active_xml = self._active_list_xml(1)
         detail_xml = self._session_detail_xml_no_response_time()
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(min_latency_ms=0)
         assert result.actual_sessions_returned == 0
@@ -1055,43 +858,25 @@ class TestEnrichedLatencyFiltering:
     @pytest.mark.asyncio
     async def test_without_latency_filter_enriches_only_limit(self):
         """Without latency filters, only ``limit`` sessions are enriched."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         active_xml = self._active_list_xml(10)
         enrich_call_count = 0
         detail_xml = self._session_detail_xml(100)
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             nonlocal enrich_call_count
-            enrich_call_count += 1
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                enrich_call_count += 1
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(limit=2)
         assert result.actual_sessions_returned == 2
@@ -1100,44 +885,26 @@ class TestEnrichedLatencyFiltering:
     @pytest.mark.asyncio
     async def test_with_latency_filter_enriches_up_to_cap(self):
         """With a latency filter, up to ENRICHMENT_CAP sessions are enriched, not just ``limit``."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         n_sessions = 120
         active_xml = self._active_list_xml(n_sessions)
         enrich_call_count = 0
         detail_xml = self._session_detail_xml(100)
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             nonlocal enrich_call_count
-            enrich_call_count += 1
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                enrich_call_count += 1
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(
             limit=2, min_latency_ms=0,
@@ -1148,44 +915,26 @@ class TestEnrichedLatencyFiltering:
     @pytest.mark.asyncio
     async def test_cap_not_exceeded_when_fewer_candidates(self):
         """When candidate sessions < ENRICHMENT_CAP, all candidates are enriched."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         n_sessions = 5
         active_xml = self._active_list_xml(n_sessions)
         enrich_call_count = 0
         detail_xml = self._session_detail_xml(100)
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             nonlocal enrich_call_count
-            enrich_call_count += 1
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                enrich_call_count += 1
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(
             limit=2, min_latency_ms=0,
@@ -1196,41 +945,23 @@ class TestEnrichedLatencyFiltering:
     @pytest.mark.asyncio
     async def test_cap_filters_then_truncates_to_limit(self):
         """After enriching ENRICHMENT_CAP sessions and filtering, result is truncated to limit."""
-        import contextlib
         from tools.session_tool_handler import SessionToolHandler
 
         n_sessions = 120
         active_xml = self._active_list_xml(n_sessions)
         detail_xml = self._session_detail_xml(500)
-
-        class FakeResponse:
-            def __init__(self, data: bytes):
-                self._data = data
-            def raise_for_status(self):
-                return None
-            async def aiter_bytes(self):
-                yield self._data
-
-        @contextlib.asynccontextmanager
-        async def fake_get_stream(endpoint):
-            yield FakeResponse(active_xml.encode("utf-8"))
-
         mock_client = AsyncMock()
-        mock_client.get_stream = fake_get_stream
 
         async def mock_get(endpoint):
             r = Mock()
-            r.text = detail_xml
+            if "AuthList" in endpoint:
+                r.text = active_xml
+            else:
+                r.text = detail_xml
             return r
 
         mock_client.get = mock_get
-
-        # A pass-through gate so tests exercise the handler, not admission.
-        class _PassGate:
-            @contextlib.asynccontextmanager
-            async def guard(self):
-                yield
-        handler = SessionToolHandler(mock_client, gate=_PassGate())
+        handler = SessionToolHandler(mock_client)
 
         result = await handler.search_enriched_active_sessions(
             limit=2, min_latency_ms=100, max_latency_ms=1000,
@@ -1579,168 +1310,3 @@ def test_enriched_limit_rejects_above_10():
 
     with pytest.raises(McpToolError):
         validate_limit(11, max_limit=10)
-
-
-class TestIterFilterActiveSessions:
-    """Streaming, memory-bounded AuthList parse + filter."""
-
-    XML = """<?xml version="1.0"?>
-    <activeList noOfActiveSession="3">
-        <activeSession>
-            <user_name>alice</user_name>
-            <calling_station_id>AA:BB:CC:DD:EE:01</calling_station_id>
-            <nas_ip_address>10.0.0.1</nas_ip_address>
-            <server>ise-1</server>
-        </activeSession>
-        <activeSession>
-            <user_name>bob</user_name>
-            <calling_station_id>AA:BB:CC:DD:EE:02</calling_station_id>
-            <nas_ip_address>10.0.0.1</nas_ip_address>
-            <server>ise-2</server>
-        </activeSession>
-        <activeSession>
-            <user_name>alice</user_name>
-            <calling_station_id>AA:BB:CC:DD:EE:03</calling_station_id>
-            <nas_ip_address>10.0.0.2</nas_ip_address>
-            <server>ise-1</server>
-        </activeSession>
-    </activeList>"""
-
-    def _src(self):
-        return io.BytesIO(self.XML.encode("utf-8"))
-
-    def test_no_filter_retains_up_to_cap_and_counts_all(self):
-        from utils.xml_parser import iter_filter_active_sessions
-
-        retained, total = iter_filter_active_sessions(self._src(), lambda s: True, retention_cap=2)
-        assert total == 3
-        assert len(retained) == 2
-        assert retained[0]["user_name"] == "alice"
-
-    def test_predicate_filters_and_counts_matches(self):
-        from utils.xml_parser import iter_filter_active_sessions
-
-        pred = lambda s: s.get("user_name") == "alice"
-        retained, total = iter_filter_active_sessions(self._src(), pred, retention_cap=10)
-        assert total == 2
-        assert len(retained) == 2
-        assert all(s["user_name"] == "alice" for s in retained)
-
-    def test_cap_zero_counts_but_retains_nothing(self):
-        from utils.xml_parser import iter_filter_active_sessions
-
-        retained, total = iter_filter_active_sessions(self._src(), lambda s: True, retention_cap=0)
-        assert total == 3
-        assert retained == []
-
-    def test_empty_list(self):
-        from utils.xml_parser import iter_filter_active_sessions
-
-        src = io.BytesIO(b'<?xml version="1.0"?><activeList noOfActiveSession="0"></activeList>')
-        retained, total = iter_filter_active_sessions(src, lambda s: True, retention_cap=5)
-        assert total == 0
-        assert retained == []
-
-    def test_empty_child_text_becomes_none(self):
-        from utils.xml_parser import iter_filter_active_sessions
-
-        src = io.BytesIO(
-            b'<?xml version="1.0"?><activeList noOfActiveSession="1">'
-            b"<activeSession><user_name>x</user_name><framed_ipv6_address/></activeSession>"
-            b"</activeList>"
-        )
-        retained, total = iter_filter_active_sessions(src, lambda s: True, retention_cap=5)
-        assert total == 1
-        assert retained[0]["user_name"] == "x"
-        assert retained[0]["framed_ipv6_address"] is None
-
-
-class TestBuildSessionPredicate:
-    """Parity between the streaming predicate and legacy _filter_sessions."""
-
-    def _handler(self):
-        from unittest.mock import AsyncMock
-        from tools.session_tool_handler import SessionToolHandler
-        return SessionToolHandler(AsyncMock())
-
-    def test_no_filters_matches_all(self):
-        pred = self._handler()._build_session_predicate(None, None, None, None, None)
-        assert pred({"user_name": "anyone"}) is True
-
-    def test_username_exact_match(self):
-        pred = self._handler()._build_session_predicate("alice", None, None, None, None)
-        assert pred({"user_name": "alice"}) is True
-        assert pred({"user_name": "alicia"}) is False
-        assert pred({"user_name": None}) is False
-
-    def test_mac_normalized_match(self):
-        # Predicate receives an already-normalized filter value; session MAC
-        # comes raw from XML and must be normalized before comparison.
-        pred = self._handler()._build_session_predicate(None, "AA:BB:CC:DD:EE:01", None, None, None)
-        assert pred({"calling_station_id": "aa-bb-cc-dd-ee-01"}) is True
-        assert pred({"calling_station_id": "AA:BB:CC:DD:EE:99"}) is False
-
-    def test_multiple_filters_are_anded(self):
-        pred = self._handler()._build_session_predicate("alice", None, "10.0.0.2", None, "ise-1")
-        assert pred({"user_name": "alice", "nas_ip_address": "10.0.0.2", "server": "ise-1"}) is True
-        assert pred({"user_name": "alice", "nas_ip_address": "10.0.0.1", "server": "ise-1"}) is False
-
-
-class TestIterFilterActiveSessionsMemoryRegression:
-    """Regression test: ensure start+end iterparse idiom keeps peak memory bounded."""
-
-    def test_large_document_memory_remains_bounded(self):
-        """Parse 4000 sessions with root.clear(); peak memory stays far below raw document size.
-
-        This test FAILS on the buggy end-only event code (peak ~= document size) and
-        PASSES on the correct start+end event code (peak << document size).
-        """
-        import tracemalloc
-        from utils.xml_parser import iter_filter_active_sessions
-
-        # Build a 4000-session document (~3.2 MB raw bytes)
-        n_sessions = 4000
-        sessions_xml = "".join([
-            "<activeSession>"
-            f"<user_name>user{i}</user_name>"
-            f"<calling_station_id>AA:BB:CC:DD:{i // 256:02X}:{i % 256:02X}</calling_station_id>"
-            "<nas_ip_address>10.0.0.1</nas_ip_address>"
-            "<server>ise-1</server>"
-            "<framed_ip_address>192.168.1.10</framed_ip_address>"
-            "<audit_session_id>SESSION-ID-000000000000</audit_session_id>"
-            "<acct_session_id>00000001</acct_session_id>"
-            "<framed_ipv6_address/>"
-            "<nas_ipv6_address/>"
-            "</activeSession>"
-            for i in range(n_sessions)
-        ])
-        doc_xml = (
-            '<?xml version="1.0"?>'
-            f'<activeList noOfActiveSession="{n_sessions}">'
-            f'{sessions_xml}'
-            '</activeList>'
-        )
-        raw_bytes = doc_xml.encode("utf-8")
-        raw_size_mb = len(raw_bytes) / (1024 * 1024)
-
-        src = io.BytesIO(raw_bytes)
-
-        tracemalloc.start()
-        retained, total = iter_filter_active_sessions(src, lambda s: True, retention_cap=10)
-        current_mem, peak_mem = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-
-        peak_mb = peak_mem / (1024 * 1024)
-        # With the correct start+end idiom + root.clear(), peak should be ~0.5 MB or less
-        # (proportional to a few retained sessions, NOT the entire 3+ MB document).
-        # With the buggy end-only code, peak will be ~3+ MB (entire document stays in memory).
-        # We assert peak < 1.5 MB; buggy code peaks ~3.2 MB, correct code peaks ~0.3 MB.
-        assert peak_mb < 1.5, (
-            f"Memory regression: peak {peak_mb:.2f} MB >= 1.5 MB threshold "
-            f"(document size {raw_size_mb:.2f} MB). "
-            "The streaming parser is NOT clearing the document tree."
-        )
-
-        # Verify functional correctness is unchanged
-        assert total == n_sessions
-        assert len(retained) == 10
