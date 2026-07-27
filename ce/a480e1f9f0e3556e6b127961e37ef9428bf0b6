@@ -1,0 +1,20 @@
+tests/test_settings_log_fields.py
+  s_d24ba6952ff477::t_7514bc3748c570 69
+  s_d24ba6952ff477::t_3fd5549bbd1498 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "cea480e1f9f0e3556e6b127961e37ef9428bf0b6",
+  "prompts": {},
+  "sessions": {
+    "s_d24ba6952ff477": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "db167d93-5788-414f-a7cf-aaf9c16cf6c0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
