@@ -200,11 +200,10 @@ class DeploymentHealthSummary(IseResultModel):
 
 
 class DeploymentDiagnostics(IseResultModel):
-    """Deeper diagnostics, populated only when deep_diagnostics=True.
+    """API-backed diagnostics, populated only when diagnostics=True.
 
-    Today this carries derived observations. The next feature adds
-    log-backed system statistics via the `system_stats` field without
-    changing this model's consumers.
+    Carries derived observations plus per-node system statistics sourced from
+    the MnT getSystemSummaryDetails API (process health and CPU/memory/latency).
     """
 
     observations: list[str] = Field(
@@ -213,7 +212,9 @@ class DeploymentDiagnostics(IseResultModel):
     )
     system_stats: Optional[dict[str, Any]] = Field(
         None,
-        description="Log-derived per-node system statistics (added by a later feature)",
+        description="Per-node system statistics from the MnT "
+        "getSystemSummaryDetails API, or an {status: 'unavailable', reason} "
+        "block when the call is gated or fails",
     )
 
 
@@ -223,5 +224,5 @@ class DeploymentHealthResult(IseResultModel):
     nodes: list[DeploymentNodeSummary] = Field(..., description="Deployed nodes")
     summary: DeploymentHealthSummary = Field(..., description="Derived health summary")
     diagnostics: Optional[DeploymentDiagnostics] = Field(
-        None, description="Deep diagnostics; present only when deep_diagnostics=True"
+        None, description="Diagnostics; present only when diagnostics=True"
     )

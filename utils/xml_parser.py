@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import defusedxml.ElementTree as ET
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable, Tuple
 from logger import logger
 
 
@@ -74,6 +74,48 @@ def parse_active_session_xml(xml_string: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Unexpected error parsing active session XML", error=str(e))
         raise
+
+
+def iter_filter_active_sessions(
+    source,
+    predicate: Callable[[Dict[str, Any]], bool],
+    retention_cap: int,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Stream-parse an ActiveList XML source, filtering as we go.
+
+    Uses ``ET.iterparse`` + ``root.clear()`` (the same idiom as
+    ``parse_msg_catalog``) so peak memory is proportional to a single
+    ``<activeSession>`` subtree plus the retained sample -- NOT the whole
+    document. Applies *predicate* to each session dict; every match
+    increments the returned total, but only the first *retention_cap*
+    matches are kept in the returned list.
+
+    Args:
+        source: Anything ``ET.iterparse`` accepts (file object or path).
+        predicate: Called with one session dict; True keeps the session.
+        retention_cap: Max sessions to retain in the returned list (>= 0).
+
+    Returns:
+        (retained_sessions, total_matched).
+    """
+    total_matched = 0
+    retained: List[Dict[str, Any]] = []
+    context = ET.iterparse(source, events=("start", "end"))
+    _, root = next(context)
+    for event, elem in context:
+        if event != "end" or elem.tag != "activeSession":
+            continue
+        session_data: Dict[str, Any] = {}
+        for child in elem:
+            value = child.text if child.text and child.text.strip() else None
+            session_data[child.tag] = value
+        if predicate(session_data):
+            total_matched += 1
+            if len(retained) < retention_cap:
+                retained.append(session_data)
+        root.clear()
+    logger.debug("Streamed active sessions", total_matched=total_matched, retained=len(retained))
+    return retained, total_matched
 
 
 # Keys to extract from other_attr_string (":!:" delimited Key=Value pairs)
@@ -442,3 +484,74 @@ def parse_msg_catalog(xml_path: str) -> Dict[str, str]:
 
     logger.info("Loaded message catalog", count=len(catalog), path=xml_path)
     return catalog
+
+
+def iter_parse_system_summary(source) -> Dict[str, Any]:
+    """Stream-parse the getSystemSummaryDetails dashboard XML from the MnT API.
+
+    Uses ``ET.iterparse`` + ``root.clear()`` (the same memory-bounded idiom as
+    ``parse_msg_catalog`` / ``iter_filter_active_sessions``) so peak memory is
+    proportional to one repeated element subtree, not the whole document.
+
+    Returns a dict with two lists:
+      - ``process_statuses``: one dict per ``<lstProcessStatuses>`` node,
+        mapping each child tag to its text (empty elements -> None).
+      - ``status_60min``: one dict per ``<lstSystemStatus60Min>`` sample,
+        with server/timestamp/cpuUtilization/memoryUtilization/latency.
+
+    The ``<lstSystemStatus24Hr>`` series is intentionally skipped (its subtree
+    is cleared but never materialized).
+
+    Args:
+        source: Anything ``ET.iterparse`` accepts (file object or path).
+
+    Raises:
+        ET.ParseError: If the XML is malformed.
+        ValueError: If the root element is not ``dashboardResult``.
+    """
+    def _local(tag: str) -> str:
+        return tag.split("}", 1)[-1] if "}" in tag else tag
+
+    def _row(elem) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        for child in elem:
+            text = child.text if child.text and child.text.strip() else None
+            data[_local(child.tag)] = text
+        return data
+
+    process_statuses: List[Dict[str, Any]] = []
+    status_60min: List[Dict[str, Any]] = []
+    try:
+        context = ET.iterparse(source, events=("start", "end"))
+        _, root = next(context)  # first event is 'start' on the root element
+        if _local(root.tag) != "dashboardResult":
+            raise ValueError(
+                f"Expected root element 'dashboardResult', got '{root.tag}'"
+            )
+        for event, elem in context:
+            if event != "end":
+                continue
+            tag = _local(elem.tag)
+            if tag == "lstProcessStatuses":
+                process_statuses.append(_row(elem))
+                root.clear()
+            elif tag == "lstSystemStatus60Min":
+                status_60min.append(_row(elem))
+                root.clear()
+            elif tag == "lstSystemStatus24Hr":
+                root.clear()  # unused; free the subtree immediately
+    except ET.ParseError as e:
+        logger.error("Failed to parse system summary XML", error=str(e))
+        raise
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error parsing system summary XML", error=str(e))
+        raise
+
+    logger.debug(
+        "Streamed system summary XML",
+        process_nodes=len(process_statuses),
+        samples_60min=len(status_60min),
+    )
+    return {"process_statuses": process_statuses, "status_60min": status_60min}

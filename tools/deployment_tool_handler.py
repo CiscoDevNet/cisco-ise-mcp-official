@@ -34,15 +34,18 @@ class DeploymentToolHandler(BaseToolHandler):
     async def get_deployment_health(
         self,
         hostnames: list[str] | None = None,
-        deep_diagnostics: bool = False,
+        diagnostics: bool = False,
     ) -> DeploymentHealthResult:
         """Fetch deployed nodes and compute a derived health assessment.
 
         Args:
             hostnames: Exact node hostnames to filter on (OR-combined).
                 None/empty returns all nodes.
-            deep_diagnostics: When True, attach deeper diagnostics via the
-                DeploymentDiagnosticsResolver.
+            diagnostics: When True, attach API-backed diagnostics (process
+                health + CPU/memory/latency from getSystemSummaryDetails) via
+                the DeploymentDiagnosticsResolver. Opt-in because the response
+                can be large in big deployments and the call is gated for MnT
+                backpressure.
 
         Returns:
             DeploymentHealthResult with nodes, summary, and optional diagnostics.
@@ -58,7 +61,7 @@ class DeploymentToolHandler(BaseToolHandler):
         logger.info(
             "Fetching deployment nodes",
             hostname_count=len(hostnames) if hostnames else 0,
-            deep_diagnostics=deep_diagnostics,
+            diagnostics=diagnostics,
         )
 
         raw_response = await self.execute_api_call(
@@ -76,9 +79,9 @@ class DeploymentToolHandler(BaseToolHandler):
             nodes, requested_hostnames=hostnames
         )
 
-        diagnostics = None
-        if deep_diagnostics:
-            diagnostics = await self.diagnostics_resolver.resolve(
+        diagnostics_result = None
+        if diagnostics:
+            diagnostics_result = await self.diagnostics_resolver.resolve(
                 nodes, scoped=bool(hostnames)
             )
 
@@ -90,5 +93,5 @@ class DeploymentToolHandler(BaseToolHandler):
         )
 
         return DeploymentHealthResult(
-            nodes=nodes, summary=summary, diagnostics=diagnostics
+            nodes=nodes, summary=summary, diagnostics=diagnostics_result
         )

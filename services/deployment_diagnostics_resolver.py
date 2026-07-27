@@ -2,70 +2,122 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Derives deeper deployment diagnostics from the node list.
+"""Derive deployment diagnostics from the node list and the MnT dashboard API.
 
-Produces human-readable observations derived from node status and roles, and —
-when logs are reachable — log-backed per-node system statistics (CPU, memory,
-disk) read from each node's ``iseLocalStore`` log via the log service.
+Produces human-readable observations derived from node status and roles, plus
+per-node system statistics (CPU/memory/latency) fetched in a single call to the
+MnT ``getSystemSummaryDetails`` endpoint. The call covers all nodes at once;
+results are filtered to the hostnames in the caller's node list. Down processes
+are reported only as an observation ("process(es) not running: ..."); the
+structured ``processes_down`` list is dropped from ``system_stats`` to avoid
+duplicating the same information as both prose and data.
 
-Only a bounded set of nodes is sampled (unhealthy first, else connected),
-because a large deployment has too many nodes to fetch logs from all of them;
-the coverage-summary observation makes the sampling explicit.
+The response is read with a streaming, memory-bounded parse (the AuthList
+pattern: ``get_stream`` -> spooled temp file -> ``iterparse`` off the event loop)
+and the fetch runs inside the shared ``mnt_gate`` so it shares MnT-node
+backpressure with the session tools.
+
+Diagnostics degrade gracefully: a gate rejection folds into an ``unavailable``
+system_stats block with a distinct retry-oriented reason, and any other failure
+(auth / HTTP / parse) into one generic reason. The base observations still run,
+and the tool never fails because diagnostics could not be produced.
 """
 
 import asyncio
+import tempfile
+
+from fastmcp.exceptions import ToolError as McpToolError
 
 from logger import logger
+from clients.mnt_gate import mnt_gate
 from models.deployment_models import DeploymentDiagnostics, DeploymentNodeSummary
-from services.log_service import log_service
-from services.system_stats_parser import SystemStatsParser
+from services.system_summary_parser import SystemSummaryParser
+from utils.xml_parser import iter_parse_system_summary
 
 _CONNECTED = "Connected"
-_STATS_LOG_NAME = "iseLocalStore"
-_MAX_STATS_NODES = 3
+_SUMMARY_ENDPOINT = "dashboard/getSystemSummaryDetails"
+_SPOOL_MAX_BYTES = 64 * 1024 * 1024
+
+_BUSY_REASON = (
+    "diagnostics skipped: the ISE MnT node is busy or under load; retry shortly"
+)
+_GENERIC_REASON = (
+    "diagnostics unavailable; no system-summary data could be retrieved"
+)
 
 
 class DeploymentDiagnosticsResolver:
-    def __init__(self) -> None:
-        self._parser = SystemStatsParser()
+    def __init__(self, mnt_client, gate=None) -> None:
+        self._mnt_client = mnt_client
+        self._gate = gate if gate is not None else mnt_gate
+        self._parser = SystemSummaryParser()
 
-    def _select_nodes(
+    async def _fetch_and_parse(self) -> dict:
+        """Stream + parse the summary XML. Raises on gate/API/parse failure."""
+        async with self._gate.guard():
+            async with self._mnt_client.get_stream(_SUMMARY_ENDPOINT) as response:
+                with tempfile.SpooledTemporaryFile(max_size=_SPOOL_MAX_BYTES) as buf:
+                    async for chunk in response.aiter_bytes():
+                        buf.write(chunk)
+                    buf.seek(0)
+                    # iterparse is synchronous/CPU-bound and may read a
+                    # spilled-to-disk temp file; run it off the event loop.
+                    return await asyncio.to_thread(iter_parse_system_summary, buf)
+
+    async def _system_stats(
         self, nodes: list[DeploymentNodeSummary]
-    ) -> list[DeploymentNodeSummary]:
-        """Pick up to _MAX_STATS_NODES: unhealthy first, else connected."""
-        unhealthy = [n for n in nodes if n.node_status != _CONNECTED]
-        if unhealthy:
-            return unhealthy[:_MAX_STATS_NODES]
-        connected = [n for n in nodes if n.node_status == _CONNECTED]
-        return connected[:_MAX_STATS_NODES]
+    ) -> tuple[dict, list[str]]:
+        """Fetch + parse system summary. Never raises.
 
-    async def _node_stats(self, node: DeploymentNodeSummary) -> dict:
-        """Fetch + parse one node's stats. Never raises; returns a status block."""
-        target = node.fqdn or node.hostname
+        Returns ``(system_stats, extra_observations)``. On a gate rejection the
+        block carries the busy/retry reason; on any other failure the generic
+        reason.
+        """
         try:
-            async with log_service.fetch(_STATS_LOG_NAME, target) as path:
-                parsed = self._parser.parse(path)
-        except Exception as exc:  # auth / HTTP / zip / parse — isolate per node
-            # Full detail (status code, URL, host) goes to the server-side log
-            # for operators; the returned reason stays generic so internal
-            # infrastructure details are not surfaced to the caller.
+            parsed = await self._fetch_and_parse()
+            per_node = self._parser.build(parsed)
+        except McpToolError as exc:
+            # Gate rejection (ISE_BUSY) -> degrade, do NOT re-raise.
+            logger.info("Deployment diagnostics gated (MnT busy)", error=str(exc))
+            return ({"status": "unavailable", "reason": _BUSY_REASON}, [])
+        except Exception as exc:  # auth / HTTP / parse — isolate, log full detail
             logger.info(
-                "Deep diagnostics: log unavailable for node",
-                hostname=node.hostname,
+                "Deployment diagnostics: system summary unavailable",
                 error=str(exc),
             )
-            return {
-                "status": "unavailable",
-                "reason": "system-stats log could not be fetched; no further "
-                "diagnostic information available for this node",
-            }
+            return ({"status": "unavailable", "reason": _GENERIC_REASON}, [])
 
-        if not parsed:
-            return {
-                "status": "unavailable",
-                "reason": "no ISE Utilization samples in the last hour",
-            }
-        return {"status": "ok", **parsed}
+        wanted = {n.hostname for n in nodes}
+        scoped_nodes = {h: v for h, v in per_node.items() if h in wanted}
+        if per_node and not scoped_nodes:
+            # The summary returned rows but none matched the requested
+            # hostnames (e.g. the summary keys by a name form the node list
+            # does not use). Surface it so an all-empty nodes block is not
+            # mistaken for a healthy deployment with no faults.
+            logger.info(
+                "Deployment diagnostics: system summary rows did not match "
+                "any requested node",
+                summary_row_count=len(per_node),
+                requested_node_count=len(wanted),
+            )
+
+        observations: list[str] = []
+        for hostname, data in scoped_nodes.items():
+            # Down processes are surfaced as a human-readable observation, so
+            # the structured key is redundant in the payload — pop it out.
+            down = data.pop("processes_down", None) or []
+            if down:
+                observations.append(
+                    f"{hostname}: process(es) not running: {', '.join(down)}."
+                )
+
+        return (
+            {
+                "duration_minutes": 60,
+                "nodes": scoped_nodes,
+            },
+            observations,
+        )
 
     async def resolve(
         self, nodes: list[DeploymentNodeSummary], scoped: bool = False
@@ -74,11 +126,9 @@ class DeploymentDiagnosticsResolver:
 
         Args:
             nodes: The node list to diagnose.
-            scoped: True when the caller filtered to specific hostnames. A
-                filtered slice describes only the requested nodes, so
-                deployment-wide HA claims (missing Primary/Secondary PAN) are
-                omitted — mirroring ``DeploymentHealthSummary``'s
-                ``scope="filtered"`` behavior. Per-node observations and
+            scoped: True when the caller filtered to specific hostnames.
+                Deployment-wide HA claims (missing Primary/Secondary PAN) are
+                omitted for a filtered slice; per-node observations and
                 system_stats are still produced.
         """
         observations: list[str] = []
@@ -90,8 +140,6 @@ class DeploymentDiagnosticsResolver:
                     "(not Connected)"
                 )
 
-        # PAN redundancy is a deployment-wide property; a filtered query cannot
-        # support it (the missing PAN may simply be outside the filter).
         if not scoped:
             has_primary = any("PrimaryAdmin" in n.roles for n in nodes)
             has_secondary = any("SecondaryAdmin" in n.roles for n in nodes)
@@ -106,23 +154,9 @@ class DeploymentDiagnosticsResolver:
                 )
 
         system_stats = None
-        selected = self._select_nodes(nodes)
-        if selected:
-            results = await asyncio.gather(
-                *(self._node_stats(n) for n in selected)
-            )
-            node_stats = {n.hostname: r for n, r in zip(selected, results)}
-            succeeded = sum(1 for r in node_stats.values() if r.get("status") == "ok")
-            system_stats = {
-                "anchor": "latest_log_timestamp",
-                "duration_minutes": 60,
-                "nodes": node_stats,
-            }
-            observations.append(
-                f"Fetched diagnostic data from {succeeded} of {len(selected)} "
-                "node(s) (unhealthy nodes prioritized). Check the health of "
-                "individual nodes for more details."
-            )
+        if nodes:
+            system_stats, stats_observations = await self._system_stats(nodes)
+            observations.extend(stats_observations)
 
         return DeploymentDiagnostics(
             observations=observations, system_stats=system_stats

@@ -35,3 +35,39 @@ def test_cookie_is_secret(monkeypatch):
     # SecretStr hides value in repr
     assert "APPSESSIONID" not in repr(s.ise_admin_session_cookie)
     assert s.ise_admin_session_cookie.get_secret_value().startswith("APPSESSIONID=")
+
+
+def test_mnt_gate_defaults(monkeypatch):
+    # Ensure a clean env so defaults apply.
+    for var in (
+        "ISE_MNT_GATE_MAX_CONCURRENCY",
+        "ISE_MNT_GATE_MIN_INTERVAL_S",
+        "ISE_MNT_GATE_BACKOFF_BASE_S",
+        "ISE_MNT_GATE_BACKOFF_MAX_S",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ISE_IP", "192.0.2.1")
+
+    from clients.settings import ISESettings
+
+    s = ISESettings(_env_file=None)
+    assert s.mnt_gate_max_concurrency == 1
+    assert s.mnt_gate_min_interval_s == 0.0
+    assert s.mnt_gate_backoff_base_s == 5.0
+    assert s.mnt_gate_backoff_max_s == 300.0
+
+
+def test_mnt_gate_empty_env_falls_back_to_default(monkeypatch):
+    monkeypatch.setenv("ISE_IP", "192.0.2.1")
+    monkeypatch.setenv("ISE_MNT_GATE_MAX_CONCURRENCY", "")
+    monkeypatch.setenv("ISE_MNT_GATE_MIN_INTERVAL_S", "")
+    monkeypatch.setenv("ISE_MNT_GATE_BACKOFF_BASE_S", "")
+    monkeypatch.setenv("ISE_MNT_GATE_BACKOFF_MAX_S", "")
+
+    from clients.settings import ISESettings
+
+    s = ISESettings(_env_file=None)
+    assert s.mnt_gate_max_concurrency == 1
+    assert s.mnt_gate_min_interval_s == 0.0
+    assert s.mnt_gate_backoff_base_s == 5.0
+    assert s.mnt_gate_backoff_max_s == 300.0

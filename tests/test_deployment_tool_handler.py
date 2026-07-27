@@ -27,12 +27,44 @@ def _raw_node(hostname, roles, status="Connected"):
 
 
 def _make_handler():
+    from contextlib import asynccontextmanager
     from tools.deployment_tool_handler import DeploymentToolHandler
     from services.deployment_diagnostics_resolver import DeploymentDiagnosticsResolver
 
     mock_factory = MagicMock()
     mock_factory.get_client.return_value = MagicMock()
-    return DeploymentToolHandler(mock_factory, DeploymentDiagnosticsResolver())
+
+    body = (
+        b'<?xml version="1.0"?><dashboardResult>'
+        b'<lstProcessStatuses><server>vm218</server><status>Failed</status>'
+        b'<applicationServer>1</applicationServer></lstProcessStatuses>'
+        b'</dashboardResult>'
+    )
+
+    class _Resp:
+        async def aiter_bytes(self):
+            yield body
+
+    mnt = MagicMock()
+
+    @asynccontextmanager
+    async def _get_stream(endpoint):
+        yield _Resp()
+
+    mnt.get_stream = _get_stream
+
+    class _PassGate:
+        def guard(self):
+            return self
+
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, *exc):
+            return False
+
+    resolver = DeploymentDiagnosticsResolver(mnt, gate=_PassGate())
+    return DeploymentToolHandler(mock_factory, resolver)
 
 
 class TestGetDeploymentHealth:
@@ -92,25 +124,24 @@ class TestGetDeploymentHealth:
         mock_exec.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_deep_diagnostics_attaches_diagnostics(self):
-        from contextlib import asynccontextmanager
+    async def test_diagnostics_flag_attaches_diagnostics(self):
         handler = _make_handler()
-
-        @asynccontextmanager
-        async def _fetch(log_name, hostname):
-            raise RuntimeError("no log in test")
-            yield  # pragma: no cover
-
-        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec, \
-             patch("services.deployment_diagnostics_resolver.log_service") as ls:
-            ls.fetch = _fetch
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"response": [
                 _raw_node("vm220", [], status="NotInSync"),
             ]}
-            result = await handler.get_deployment_health(deep_diagnostics=True)
+            result = await handler.get_deployment_health(diagnostics=True)
 
         assert result.diagnostics is not None
         assert any("vm220" in o for o in result.diagnostics.observations)
+
+    @pytest.mark.asyncio
+    async def test_diagnostics_default_off(self):
+        handler = _make_handler()
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"response": [_raw_node("vm218", ["PrimaryAdmin"])]}
+            result = await handler.get_deployment_health()
+        assert result.diagnostics is None
 
     @pytest.mark.asyncio
     async def test_empty_response_yields_empty_nodes(self):

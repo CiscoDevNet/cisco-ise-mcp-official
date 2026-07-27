@@ -1155,12 +1155,12 @@ class TestDeploymentTool:
         with patch("server.deployment_tool_handler") as mock_handler:
             mock_handler.get_deployment_health = AsyncMock(return_value=mock_return)
             from server import ise_deployment_health
-            result = await ise_deployment_health(hostnames=["vm218"], deep_diagnostics=True)
+            result = await ise_deployment_health(hostnames=["vm218"], diagnostics=True)
 
         mock_handler.get_deployment_health.assert_called_once()
         kw = mock_handler.get_deployment_health.call_args[1]
         assert kw["hostnames"] == ["vm218"]
-        assert kw["deep_diagnostics"] is True
+        assert kw["diagnostics"] is True
         assert isinstance(result, DeploymentHealthResult)
         data = pydantic_core.to_jsonable_python(result)
         assert data["summary"]["verdict"] == "degraded"
@@ -1182,7 +1182,7 @@ class TestDeploymentTool:
 
         kw = mock_handler.get_deployment_health.call_args[1]
         assert kw["hostnames"] is None
-        assert kw["deep_diagnostics"] is False
+        assert kw["diagnostics"] is False
 
 
 def test_diagnose_certificate_issues_registered():
