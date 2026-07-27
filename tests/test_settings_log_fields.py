@@ -50,7 +50,7 @@ def test_mnt_gate_defaults(monkeypatch):
 
     from clients.settings import ISESettings
 
-    s = ISESettings()
+    s = ISESettings(_env_file=None)
     assert s.mnt_gate_max_concurrency == 1
     assert s.mnt_gate_min_interval_s == 0.0
     assert s.mnt_gate_backoff_base_s == 5.0
@@ -66,7 +66,7 @@ def test_mnt_gate_empty_env_falls_back_to_default(monkeypatch):
 
     from clients.settings import ISESettings
 
-    s = ISESettings()
+    s = ISESettings(_env_file=None)
     assert s.mnt_gate_max_concurrency == 1
     assert s.mnt_gate_min_interval_s == 0.0
     assert s.mnt_gate_backoff_base_s == 5.0
