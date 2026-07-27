@@ -14,11 +14,29 @@ def test_log_fields_have_defaults(monkeypatch):
     monkeypatch.delenv("ISE_ADMIN_SESSION_COOKIE", raising=False)
     monkeypatch.delenv("LOG_CACHE_TTL_S", raising=False)
     monkeypatch.delenv("LOG_CACHE_DIR_PREFIX", raising=False)
+    monkeypatch.delenv("LOG_DOWNLOAD_MAX_CONCURRENCY", raising=False)
     from clients.settings import ISESettings
     s = ISESettings(_env_file=None)
     assert s.ise_admin_session_cookie is None
     assert s.log_cache_ttl_s == 300.0
     assert s.log_cache_dir_prefix == "ise-logs-"
+    assert s.log_download_max_concurrency == 1
+
+
+def test_log_download_max_concurrency_respects_env(monkeypatch):
+    monkeypatch.setenv("ISE_IP", "192.0.2.1")
+    monkeypatch.setenv("LOG_DOWNLOAD_MAX_CONCURRENCY", "3")
+    from clients.settings import ISESettings
+    s = ISESettings(_env_file=None)
+    assert s.log_download_max_concurrency == 3
+
+
+def test_log_download_max_concurrency_empty_env_falls_back_to_default(monkeypatch):
+    monkeypatch.setenv("ISE_IP", "192.0.2.1")
+    monkeypatch.setenv("LOG_DOWNLOAD_MAX_CONCURRENCY", "")
+    from clients.settings import ISESettings
+    s = ISESettings(_env_file=None)
+    assert s.log_download_max_concurrency == 1
 
 
 def test_empty_cookie_normalizes_to_none(monkeypatch):

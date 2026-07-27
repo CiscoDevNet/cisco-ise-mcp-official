@@ -270,6 +270,166 @@ class TestTier2FormLogin:
             assert len(mock_httpx.cookies) == 0
 
 
+class _StreamCtx:
+    """Fake object returned by client.stream(...) — an async context manager
+    yielding ``resp``. Mirrors httpx.AsyncClient.stream()."""
+    def __init__(self, resp):
+        self._resp = resp
+    async def __aenter__(self):
+        return self._resp
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _stream_resp(status_code=200, headers=None, chunks=None):
+    r = MagicMock(spec=httpx.Response)
+    r.status_code = status_code
+    r.headers = headers or {}
+    r.cookies = httpx.Cookies()
+    async def aiter_bytes():
+        for c in (chunks or [b"body"]):
+            yield c
+    r.aiter_bytes = aiter_bytes
+    return r
+
+
+class TestStreamTier1EnvCookie:
+    def setup_method(self):
+        _reset()
+
+    @pytest.mark.asyncio
+    async def test_stream_env_cookie_used_directly_no_login(self):
+        import clients.ise_web_session as mod
+        ok = _stream_resp(200, chunks=[b"ab", b"cd"])
+        mock_httpx = MagicMock(spec=httpx.AsyncClient)
+        mock_httpx.is_closed = False
+        mock_httpx.stream = MagicMock(return_value=_StreamCtx(ok))
+        mock_httpx.post = AsyncMock()
+        with patch("clients.ise_web_session.settings") as s:
+            s.ise_admin_session_cookie = MagicMock()
+            s.ise_admin_session_cookie.get_secret_value.return_value = "APPSESSIONID=a; MNTLA_JWT_TOKEN=b"
+            client = mod.IseWebSession()
+            client._client = mock_httpx
+            collected = b""
+            async with client.stream("https://host/admin/x.log.zip") as resp:
+                assert resp is ok
+                async for chunk in resp.aiter_bytes():
+                    collected += chunk
+            assert collected == b"abcd"
+            # Cookie header attached; no login POST
+            _, kwargs = mock_httpx.stream.call_args
+            assert "Cookie" in kwargs["headers"]
+            mock_httpx.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stream_env_cookie_expiry_fails_loud(self):
+        import clients.ise_web_session as mod
+        redirect = _stream_resp(302, headers={"location": "/admin/login.jsp"})
+        mock_httpx = MagicMock(spec=httpx.AsyncClient)
+        mock_httpx.is_closed = False
+        mock_httpx.stream = MagicMock(return_value=_StreamCtx(redirect))
+        with patch("clients.ise_web_session.settings") as s:
+            s.ise_admin_session_cookie = MagicMock()
+            s.ise_admin_session_cookie.get_secret_value.return_value = "APPSESSIONID=a"
+            client = mod.IseWebSession()
+            client._client = mock_httpx
+            with pytest.raises(mod.IseSessionAuthError, match="[Rr]efresh"):
+                async with client.stream("https://host/admin/x.log.zip"):
+                    pass
+
+
+class TestStreamTier2FormLogin:
+    def setup_method(self):
+        _reset()
+
+    @pytest.mark.asyncio
+    async def test_stream_form_login_then_stream_succeeds(self):
+        import clients.ise_web_session as mod
+        login_page = _resp(200, text=LOGIN_HTML)
+        login_post = _resp(302, headers={"location": "https://host/"})
+        zip_ok = _stream_resp(200, chunks=[b"zip", b"data"])
+        mock_httpx = MagicMock(spec=httpx.AsyncClient)
+        mock_httpx.is_closed = False
+        mock_httpx.cookies = httpx.Cookies()
+        mock_httpx.get = AsyncMock(return_value=login_page)
+        mock_httpx.post = AsyncMock(return_value=login_post)
+        mock_httpx.stream = MagicMock(return_value=_StreamCtx(zip_ok))
+        with patch("clients.ise_web_session.settings") as s, \
+             patch("clients.ise_web_session.get_per_user_credential", return_value=None):
+            s.ise_admin_session_cookie = None
+            s.api_username = "admin"
+            s.api_pwd = MagicMock()
+            s.api_pwd.get_secret_value.return_value = "pw"
+            s.ise_ip = "host"; s.api_port = 443
+            client = mod.IseWebSession()
+            client._client = mock_httpx
+            async with client.stream("https://host/admin/x.log.zip") as resp:
+                assert resp is zip_ok
+            mock_httpx.post.assert_awaited_once()
+            # jar cleared after the streamed request completes
+            assert len(mock_httpx.cookies) == 0
+
+    @pytest.mark.asyncio
+    async def test_stream_expired_session_reauths_once(self):
+        import clients.ise_web_session as mod
+        login_page = _resp(200, text=LOGIN_HTML)
+        login_post = _resp(302, headers={"location": "https://host/"})
+        first_stream = _stream_resp(302, headers={"location": "/admin/login.jsp"})
+        second_stream = _stream_resp(200, chunks=[b"ok"])
+        mock_httpx = MagicMock(spec=httpx.AsyncClient)
+        mock_httpx.is_closed = False
+        mock_httpx.cookies = httpx.Cookies()
+        mock_httpx.get = AsyncMock(side_effect=[login_page, login_page])
+        mock_httpx.post = AsyncMock(return_value=login_post)
+        mock_httpx.stream = MagicMock(side_effect=[
+            _StreamCtx(first_stream), _StreamCtx(second_stream),
+        ])
+        with patch("clients.ise_web_session.settings") as s, \
+             patch("clients.ise_web_session.get_per_user_credential", return_value=None):
+            s.ise_admin_session_cookie = None
+            s.api_username = "admin"
+            s.api_pwd = MagicMock()
+            s.api_pwd.get_secret_value.return_value = "pw"
+            s.ise_ip = "host"; s.api_port = 443
+            client = mod.IseWebSession()
+            client._client = mock_httpx
+            async with client.stream("https://host/admin/x.log.zip") as resp:
+                assert resp is second_stream
+            assert mock_httpx.post.await_count == 2  # re-login happened
+
+    @pytest.mark.asyncio
+    async def test_stream_two_users_get_isolated_sessions(self):
+        import clients.ise_web_session as mod
+        cred_a = "Basic " + base64.b64encode(b"alice:secret").decode()
+        cred_b = "Basic " + base64.b64encode(b"bob:hunter2").decode()
+        login_page = _resp(200, text=LOGIN_HTML)
+        login_post = _resp(302, headers={"location": "https://host/"})
+        mock_httpx = MagicMock(spec=httpx.AsyncClient)
+        mock_httpx.is_closed = False
+        mock_httpx.cookies = httpx.Cookies()
+        mock_httpx.get = AsyncMock(side_effect=[login_page, login_page])
+        mock_httpx.post = AsyncMock(return_value=login_post)
+        mock_httpx.stream = MagicMock(side_effect=[
+            _StreamCtx(_stream_resp(200)), _StreamCtx(_stream_resp(200)),
+        ])
+        with patch("clients.ise_web_session.settings") as s:
+            s.ise_admin_session_cookie = None
+            s.api_username = "svc"
+            s.api_pwd = MagicMock()
+            s.api_pwd.get_secret_value.return_value = "svcpw"
+            s.ise_ip = "host"; s.api_port = 443
+            client = mod.IseWebSession()
+            client._client = mock_httpx
+            with patch("clients.ise_web_session.get_per_user_credential", return_value=cred_a):
+                async with client.stream("https://host/admin/x.log.zip"):
+                    pass
+            with patch("clients.ise_web_session.get_per_user_credential", return_value=cred_b):
+                async with client.stream("https://host/admin/x.log.zip"):
+                    pass
+            assert mock_httpx.post.await_count == 2
+            assert len(client._sessions) == 2
+
+
 class TestCredentialResolution:
     def setup_method(self):
         _reset()

@@ -24,6 +24,7 @@ import base64
 import binascii
 import hashlib
 import re
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
@@ -188,6 +189,70 @@ class IseWebSession:
 
         # Tier 2: form login (implemented in Task 4).
         return await self._get_with_form_login(url, req_headers)
+
+    @asynccontextmanager
+    async def stream(self, url: str, *, headers: Optional[dict] = None):
+        """Stream an authenticated GET against the ISE admin UI.
+
+        Yields a *streaming* ``httpx.Response`` whose body must be consumed
+        via ``resp.aiter_bytes()`` INSIDE the ``async with`` block (httpx keeps
+        the connection open only for the context's lifetime). Peak memory is
+        one chunk, independent of file size -- this is the memory-safe path for
+        large log-zip downloads.
+
+        Preserves everything ``get()`` does:
+          * Tier-1 env-cookie path, failing loud with IseSessionAuthError on a
+            login redirect (cookie expired/invalid).
+          * Tier-2 per-credential single-flight form login, plus a single
+            re-auth-and-reopen on a mid-use session-expiry redirect.
+          * ``_clear_shared_jar()`` after each underlying request so one user's
+            Set-Cookie is never replayed on another user's request.
+
+        Redirect detection reads only status_code/headers, which httpx exposes
+        on a streaming response before the body is read, so we can decide to
+        fail (Tier 1) or re-auth (Tier 2) without consuming the body.
+        """
+        client = await self._get_client()
+        req_headers = dict(headers or {})
+
+        if self._has_env_cookie():
+            req_headers["Cookie"] = settings.ise_admin_session_cookie.get_secret_value()
+            async with client.stream("GET", url, headers=req_headers) as resp:
+                if self._is_login_redirect(resp):
+                    raise IseSessionAuthError(
+                        "Configured ISE_ADMIN_SESSION_COOKIE has expired or is "
+                        "invalid (redirected to login). Refresh the cookie value."
+                    )
+                yield resp
+            return
+
+        # Tier 2: form login with the current request's credential.
+        key = self._credential_cache_key()
+        async with self._lock_for_key(key):
+            jar = self._sessions.get(key)
+            if jar is None:
+                jar = await self._form_login()
+                self._sessions[key] = jar
+
+        async with client.stream("GET", url, headers=req_headers, cookies=jar) as resp:
+            self._clear_shared_jar()
+            if not self._is_login_redirect(resp):
+                yield resp
+                return
+
+        # Session expired mid-use: re-auth once for this credential, then
+        # re-open the stream. Done outside the first context so the stale
+        # connection is released before we open the retry.
+        async with self._lock_for_key(key):
+            jar = await self._form_login()
+            self._sessions[key] = jar
+        async with client.stream("GET", url, headers=req_headers, cookies=jar) as resp:
+            self._clear_shared_jar()
+            if self._is_login_redirect(resp):
+                raise IseSessionAuthError(
+                    "ISE session still unauthorized after re-login."
+                )
+            yield resp
 
     @staticmethod
     def _scrape_csrf(html: str) -> str:
