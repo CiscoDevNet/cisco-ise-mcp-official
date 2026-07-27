@@ -1744,3 +1744,120 @@ class TestIterFilterActiveSessionsMemoryRegression:
         # Verify functional correctness is unchanged
         assert total == n_sessions
         assert len(retained) == 10
+
+
+class TestEnrichmentConcurrencyBound:
+    """search_enriched_active_sessions must cap concurrent _enrich_session calls."""
+
+    def _active_list_xml(self, n: int) -> str:
+        rows = "".join(
+            f"""<activeSession>
+                <user_name>user{i}</user_name>
+                <calling_station_id>AA:BB:CC:DD:EE:{i:02X}</calling_station_id>
+                <nas_ip_address>10.0.0.{i}</nas_ip_address>
+                <server>ise-1</server>
+                <framed_ip_address>192.168.1.{i}</framed_ip_address>
+            </activeSession>"""
+            for i in range(1, n + 1)
+        )
+        return f'<?xml version="1.0"?><activeList noOfActiveSession="{n}">{rows}</activeList>'
+
+    def _make_handler(self, n_sessions: int):
+        import contextlib
+        from tools.session_tool_handler import SessionToolHandler
+
+        class FakeResponse:
+            def __init__(self, data: bytes):
+                self._data = data
+            def raise_for_status(self):
+                return None
+            async def aiter_bytes(self):
+                yield self._data
+
+        xml = self._active_list_xml(n_sessions)
+
+        @contextlib.asynccontextmanager
+        async def fake_get_stream(endpoint):
+            yield FakeResponse(xml.encode("utf-8"))
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_get_stream
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+
+        return SessionToolHandler(mock_client, gate=_PassGate())
+
+    @pytest.mark.asyncio
+    async def test_enrichment_concurrency_never_exceeds_cap(self):
+        """Peak simultaneous _enrich_session calls must not exceed the cap
+        even when far more sessions are enriched."""
+        import asyncio
+        from tools.session_tool_handler import SessionToolHandler
+        from models.session_models import SessionDetail
+
+        n_sessions = 40  # > cap; latency filter forces enrichment of all
+        handler = self._make_handler(n_sessions)
+
+        cap = SessionToolHandler.ENRICHMENT_MAX_CONCURRENCY
+        assert cap == 10
+
+        in_flight = 0
+        peak = 0
+        release = asyncio.Event()
+        entered = 0
+
+        async def instrumented_enrich(session):
+            nonlocal in_flight, peak, entered
+            in_flight += 1
+            peak = max(peak, in_flight)
+            entered += 1
+            # Once `cap` tasks are simultaneously in-flight, let them proceed;
+            # this maximizes the observed peak without deadlocking.
+            if in_flight >= cap:
+                release.set()
+            try:
+                await release.wait()
+                # A response_time_ms so the latency filter keeps it.
+                return SessionDetail(response_time=100, user_name=session.user_name)
+            finally:
+                in_flight -= 1
+
+        handler._enrich_session = instrumented_enrich
+
+        # Latency filter active -> cap=ENRICHMENT_CAP(100), so all 40 enrich.
+        result = await handler.search_enriched_active_sessions(
+            minutes=1440, limit=10, min_latency_ms=1
+        )
+        assert entered == n_sessions
+        assert peak <= cap, f"peak in-flight {peak} exceeded cap {cap}"
+        assert peak == cap, f"expected peak to reach cap {cap}, got {peak}"
+
+    @pytest.mark.asyncio
+    async def test_enrichment_preserves_order_and_drops_none(self):
+        """Bounded enrichment must keep result order and drop None results."""
+        from tools.session_tool_handler import SessionToolHandler
+        from models.session_models import SessionDetail
+
+        n_sessions = 15
+        handler = self._make_handler(n_sessions)
+
+        async def enrich(session):
+            # Drop odd-indexed users (user1, user3, ...) by returning None.
+            idx = int(session.user_name.replace("user", ""))
+            if idx % 2 == 1:
+                return None
+            return SessionDetail(response_time=idx, user_name=session.user_name)
+
+        handler._enrich_session = enrich
+
+        result = await handler.search_enriched_active_sessions(
+            minutes=1440, limit=10, min_latency_ms=1
+        )
+        returned = [s.user_name for s in result.sessions]
+        # Even users only, in original order, truncated to limit=10.
+        expected = [f"user{i}" for i in range(1, n_sessions + 1) if i % 2 == 0]
+        assert returned == expected[: len(returned)]
+        assert returned == expected  # 7 even users <= limit 10, all kept

@@ -231,11 +231,31 @@ class MNTClient:
             pool=settings.pool_timeout_s,
         )
 
+        # Explicit connection-pool ceiling. httpx defaults to
+        # max_connections=100, which is far too high for a single MnT node --
+        # one enriched session tool call could put ~100 concurrent GETs on it.
+        # This is a hard TRANSPORT backstop, not graceful backpressure: once the
+        # pool is saturated, further calls block up to settings.pool_timeout_s
+        # (5.0s) then raise httpx.PoolTimeout. Acceptable as a last-resort cap.
+        #
+        # COUPLING: max_connections MUST stay >=
+        # SessionToolHandler.ENRICHMENT_MAX_CONCURRENCY + ~2 (the +2 covers the
+        # AuthList stream connection + headroom), or a single enriched call
+        # would pool-timeout against its own limit. Current: 10 + slack < 20.
+        # If ENRICHMENT_MAX_CONCURRENCY is raised, raise max_connections in
+        # lockstep. See tools/session_tool_handler.py.
+        limits = httpx.Limits(
+            max_connections=20,
+            max_keepalive_connections=10,
+            keepalive_expiry=5.0,
+        )
+
         self._client = httpx.AsyncClient(
             auth=auth,
             headers=headers,
             verify=build_ssl_context(),
             timeout=timeout,
+            limits=limits,
             follow_redirects=False,
         )
 
