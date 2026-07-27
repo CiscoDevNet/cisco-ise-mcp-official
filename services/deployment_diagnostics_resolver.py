@@ -103,13 +103,11 @@ class DeploymentDiagnosticsResolver:
             down = data.get("processes_down") or []
             if down:
                 observations.append(
-                    f"{hostname}: process(es) not running: {', '.join(down)} "
-                    "(admin-guide: Process Down)."
+                    f"{hostname}: process(es) not running: {', '.join(down)}."
                 )
 
         return (
             {
-                "source": "getSystemSummaryDetails",
                 "duration_minutes": 60,
                 "nodes": scoped_nodes,
             },

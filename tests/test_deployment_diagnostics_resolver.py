@@ -154,7 +154,6 @@ class TestSystemStats:
     async def test_stats_keyed_by_nodes_in_list(self):
         nodes = [_node("vm218", ["PrimaryAdmin"]), _node("vm219", ["SecondaryAdmin"])]
         result = await _resolver(_mnt_streaming(_SUMMARY_XML)).resolve(nodes)
-        assert result.system_stats["source"] == "getSystemSummaryDetails"
         assert result.system_stats["duration_minutes"] == 60
         assert set(result.system_stats["nodes"].keys()) == {"vm218", "vm219"}
         assert result.system_stats["nodes"]["vm218"]["processes_down"] == ["Database Server"]
@@ -173,6 +172,29 @@ class TestSystemStats:
         joined = " ".join(result.observations)
         assert "vm218" in joined
         assert "database" in joined.lower() and "not running" in joined.lower()
+
+    @pytest.mark.asyncio
+    async def test_observation_lists_all_down_processes(self):
+        xml = b"""<?xml version="1.0"?>
+<dashboardResult>
+  <lstProcessStatuses>
+    <server>vm218</server><status>Failed</status>
+    <applicationServer>0</applicationServer><database>0</database>
+    <sxpEngine>0</sxpEngine>
+  </lstProcessStatuses>
+</dashboardResult>
+"""
+        nodes = [_node("vm218", ["PrimaryAdmin"])]
+        result = await _resolver(_mnt_streaming(xml)).resolve(nodes)
+        # Every down process is listed in the node's processes_down and in the
+        # single per-node observation, not just the first.
+        assert result.system_stats["nodes"]["vm218"]["processes_down"] == [
+            "Application Server", "Database Server", "SXP Engine Service",
+        ]
+        obs = [o for o in result.observations if "not running" in o]
+        assert len(obs) == 1
+        for name in ("Application Server", "Database Server", "SXP Engine Service"):
+            assert name in obs[0]
 
     @pytest.mark.asyncio
     async def test_no_nodes_leaves_system_stats_none(self):
