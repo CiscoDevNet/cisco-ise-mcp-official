@@ -5,17 +5,21 @@
 """Map ISE getSystemSummaryDetails dashboard data into per-node health.
 
 Pure and testable: no I/O. Consumes the dict produced by
-``utils.xml_parser.iter_parse_system_summary`` and returns a per-node summary of
-process states (running / disabled / initializing / down), the list of processes
-that are down (code 0 only), and min/max/avg/latest aggregates of the 60-minute
-CPU / memory / latency series. Processes are keyed by their human-readable
-service name (e.g. "Application Server"), not the raw camelCase bean field.
+``utils.xml_parser.iter_parse_system_summary`` and returns a per-node summary
+carrying ``processes_down`` (the processes reporting down, code 0 only) and
+min/max/avg/latest aggregates of the 60-minute CPU / memory / latency series.
 
-Services that resolve to ``not_monitored`` are omitted entirely rather than
-surfaced. That state covers three cases that all mean "no signal": the ``-1``
-nvl fallback (service not reported), any unrecognized/blank code, and the
+Only down processes are surfaced: an empty ``processes_down`` means every
+process is running as expected, so the full per-process state map is redundant
+and is not emitted. Down processes are named by their human-readable service
+name (e.g. "Application Server"), not the raw camelCase bean field; an unmapped
+field falls back to the raw bean name verbatim.
+
+Every non-down state is ignored — running, disabled, initializing, and
+``not_monitored``. The last covers three "no signal" cases: the ``-1`` nvl
+fallback (service not reported), any unrecognized/blank code, and the
 dead-wired bean fields whose DB columns no writer ever populates (e.g.
-``alertManager``, the ``xgrid*`` fields) — so they never carry a real state.
+``alertManager``, the ``xgrid*`` fields).
 
 The top-level ``<status>``/``<message>`` elements are intentionally NOT surfaced:
 that endpoint's JAXB field-access serialization emits a default "Failed" because
@@ -94,7 +98,6 @@ def _aggregate(values: List[float]) -> Dict[str, float]:
 def _blank_node() -> Dict[str, Any]:
     return {
         "processes_down": [],
-        "processes": {},
         "cpu_percent": None,
         "memory_percent": None,
         "latency": None,
@@ -110,23 +113,20 @@ class SystemSummaryParser:
             server = row.get("server")
             if not server:
                 continue
-            processes: Dict[str, str] = {}
             processes_down: List[str] = []
             for field, value in row.items():
                 if field in _NON_PROCESS_FIELDS:
                     continue
                 state = _CODE_MAP.get(value, _NOT_MONITORED)
-                if state == _NOT_MONITORED:
-                    # No signal (-1 nvl fallback, unknown code, or a dead-wired
-                    # bean field). Omit rather than surface a non-state.
-                    continue
-                name = _display_name(field)
-                processes[name] = state
+                # Only code 0 (down) is a fault worth surfacing. Every other
+                # state — running, disabled, initializing, or not_monitored
+                # (the -1 nvl fallback, unknown codes, and dead-wired bean
+                # fields) — is not reported: an empty processes_down means all
+                # processes are running as expected.
                 if state == "down":
-                    processes_down.append(name)
+                    processes_down.append(_display_name(field))
             node = _blank_node()
             node["processes_down"] = processes_down
-            node["processes"] = processes
             nodes[server] = node
 
         # Aggregate the 60-min series per server (ordered by timestamp so

@@ -37,48 +37,50 @@ def _parsed():
     }
 
 
-def test_process_code_mapping():
+def test_only_processes_down_surfaced():
     out = SystemSummaryParser().build(_parsed())
-    procs = out["vm218"]["processes"]
-    # Processes are keyed by their human-readable service name.
-    assert procs["Application Server"] == "running"      # 1
-    assert procs["Database Server"] == "down"            # 0
-    assert procs["SXP Engine Service"] == "disabled"     # 2
-    # An unmapped bean field falls back to the raw name verbatim.
-    assert procs["profilerServer"] == "initializing"     # 3
+    node = out["vm218"]
+    # Only down processes (code 0) are surfaced; there is no full per-process
+    # state map. Every other state — running (1), disabled (2), initializing
+    # (3), and not_monitored (-1 / unknown code) — is not reported.
+    assert node["processes_down"] == ["Database Server"]  # only the code-0 one
+    assert "processes" not in node
 
 
-def test_unmapped_field_falls_back_to_raw_name():
+def test_processes_down_uses_human_readable_names():
     parsed = {
-        "process_statuses": [{"server": "vm1", "someNewService": "1"}],
+        "process_statuses": [
+            {"server": "vm1", "applicationServer": "0", "sxpEngine": "0",
+             "identityMapping": "0"},
+        ],
         "status_60min": [],
     }
     out = SystemSummaryParser().build(parsed)
-    procs = out["vm1"]["processes"]
-    assert procs == {"someNewService": "running"}
+    assert out["vm1"]["processes_down"] == [
+        "Application Server", "SXP Engine Service", "PassiveID WMI Service",
+    ]
 
 
-def test_not_monitored_processes_omitted():
-    out = SystemSummaryParser().build(_parsed())
-    procs = out["vm218"]["processes"]
-    # -1 (nvl fallback) and codes above the known space (>3) both resolve to
-    # not_monitored and are dropped rather than surfaced.
-    assert "alertManager" not in procs                   # -1
-    assert "PassiveID WMI Service" not in procs          # 7 -> not_monitored
-    assert not any(v == "not_monitored" for v in procs.values())
+def test_down_process_unmapped_field_falls_back_to_raw_name():
+    parsed = {
+        "process_statuses": [{"server": "vm1", "someNewService": "0"}],
+        "status_60min": [],
+    }
+    out = SystemSummaryParser().build(parsed)
+    # An unmapped bean field falls back to the raw name verbatim.
+    assert out["vm1"]["processes_down"] == ["someNewService"]
 
 
-def test_non_process_fields_excluded_from_processes():
-    out = SystemSummaryParser().build(_parsed())
-    procs = out["vm218"]["processes"]
-    for skipped in ("server", "status", "message", "timestamp"):
-        assert skipped not in procs
-
-
-def test_processes_down_lists_only_code_zero():
-    out = SystemSummaryParser().build(_parsed())
-    # Down list uses the same human-readable service names.
-    assert out["vm218"]["processes_down"] == ["Database Server"]
+def test_non_process_fields_never_reported_as_down():
+    parsed = {
+        "process_statuses": [
+            {"server": "vm1", "status": "Failed", "message": None,
+             "timestamp": "2026-07-16 08:30:51.488", "applicationServer": "1"},
+        ],
+        "status_60min": [],
+    }
+    out = SystemSummaryParser().build(parsed)
+    assert out["vm1"]["processes_down"] == []
 
 
 def test_metric_aggregation():
@@ -107,5 +109,5 @@ def test_node_with_only_series_still_appears():
     }
     out = SystemSummaryParser().build(parsed)
     assert "vm9" in out
-    assert out["vm9"]["processes"] == {}
+    assert out["vm9"]["processes_down"] == []
     assert out["vm9"]["cpu_percent"]["latest"] == 5.0
