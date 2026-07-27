@@ -19,9 +19,13 @@ This document provides a comprehensive reference for all MCP tools exposed by th
 
 Tools for monitoring and searching authenticated network sessions from the past X minutes.
 
+**Backpressure (`ISE_BUSY`):** The four session tools below download all sessions in the requested window from the ISE MnT node. Only one download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Four env tunables control concurrency and backoff: `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1), `ISE_AUTHLIST_MIN_INTERVAL_S` (default 0.0), `ISE_AUTHLIST_BACKOFF_BASE_S` (default 5.0), `ISE_AUTHLIST_BACKOFF_MAX_S` (default 300.0). See the [README Session tools section](README.md#session-tools-resource-usage--backpressure) for the full table and guidance.
+
 ### active_sessions_search
 
 Fast, lightweight session search. Returns basic identifiers only (user, MAC, IPs, ISE node) for sessions authenticated in the past X minutes. Up to 20 results.
+
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `sessions_search_with_advanced_details` when you also need authorization profiles, posture, or auth method details.
 Use `sessions_search_with_policy_details` when you need full policy rule definitions explaining why sessions were authorized.
@@ -166,6 +170,8 @@ Use `sessions_search_with_policy_details` when you need full policy rule definit
 
 Session search enriched with WHAT happened: authorization profile, auth method, posture status, identity group, network device name, identity store, response time, and matched policy/rule names. Combines the AuthList API (session list) with the Last Session by Attributes API (detail per session). Slower than `active_sessions_search` (extra API call per session). limit default 1, max 10.
 
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
+
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_policy_details` for full policy rule definitions.
 
@@ -274,6 +280,8 @@ Use `sessions_search_with_policy_details` for full policy rule definitions.
 ### sessions_search_with_policy_details
 
 Session search enriched with WHY it was authorized: resolves full policy set, authentication rule, and authorization rule definitions from the ISE Policy API. Combines the AuthList API, the Last Session by Attributes API, and the Policy API. Slowest tool (multiple API calls per session). Caches duplicate policy lookups across sessions. limit default 1, max 10.
+
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_advanced_details` for auth profiles/posture only.
@@ -440,6 +448,8 @@ Use `sessions_search_with_advanced_details` for auth profiles/posture only.
 ### sessions_search_with_latency_details
 
 Session search enriched with per-step latency breakdown: resolves each ISE authentication execution step code into its human-readable message and attaches the latency (ms) for each step. Combines the AuthList API (session list), the Last Session by Attributes API (detail per session), and the ISE message catalog (step code resolution). Supports filtering by total response time range. limit default 1, max 10.
+
+**Heavy MnT call** — bounded MCP memory, gated to `ISE_AUTHLIST_MAX_CONCURRENCY` (default 1); may return retryable `ISE_BUSY` under load.
 
 Use `active_sessions_search` for fast identifier-only lookups.
 Use `sessions_search_with_advanced_details` for auth profiles/posture only.

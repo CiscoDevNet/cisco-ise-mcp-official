@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import AsyncIterator, List, Optional, Tuple
@@ -11,7 +12,8 @@ import httpx
 
 from logger import logger
 from clients.mnt_client import MNTClient
-from utils.xml_parser import parse_active_session_xml, parse_session_detail_xml
+from clients.auth_list_gate import auth_list_gate
+from utils.xml_parser import parse_session_detail_xml, iter_filter_active_sessions
 from utils.sampling import build_sampling_note
 from utils.input_validators import (
     normalize_mac_address,
@@ -23,7 +25,6 @@ from utils.input_validators import (
 )
 from models.session_models import (
     ActiveSession,
-    ActiveSessionList,
     ActiveSessionSearchResult,
     EnrichedSessionSearchResult,
     SessionDetail,
@@ -34,15 +35,17 @@ from models.error_models import ErrorCategory, raise_tool_error
 
 class SessionToolHandler:
     """Handler for ISE MNT Session APIs."""
-    
-    def __init__(self, mnt_client: MNTClient):
+
+    def __init__(self, mnt_client: MNTClient, gate=None):
         """
         Initialize the session tool handler.
-        
+
         Args:
             mnt_client: The MNT HTTP client instance
+            gate: Optional AuthListGate for concurrency control (defaults to singleton)
         """
         self.mnt_client = mnt_client
+        self.gate = gate if gate is not None else auth_list_gate
 
     MAX_MINUTES = 24 * 60
 
@@ -73,65 +76,76 @@ class SessionToolHandler:
                 f"An unexpected error occurred while {operation}.",
             )
 
-    async def _fetch_auth_list_sessions(self, minutes: int = 1440) -> List[ActiveSession]:
-        """Fetch authenticated sessions from the past *minutes* via Session/AuthList API.
+    async def _fetch_auth_list_sessions(
+        self,
+        filters: dict,
+        retention_cap: int,
+        minutes: int = 1440,
+    ) -> Tuple[List[ActiveSession], int]:
+        """Stream authenticated sessions from the past *minutes*, filtering
+        during the parse and retaining only up to *retention_cap* matches.
 
-        Callers must validate *minutes* before invoking this method.
+        Returns (sessions, total_matched). Runs inside the AuthList gate so
+        concurrency and MnT load are bounded. Callers must validate *minutes*
+        and normalize all *filters* values beforehand.
         """
         minutes = validate_minutes(minutes, max_minutes=self.MAX_MINUTES)
         start_time = datetime.now() - timedelta(minutes=minutes)
         start_time_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
         encoded_start_time = quote(start_time_str, safe=":")
-        encoded_end_time = "null"
-        endpoint = f"Session/AuthList/{encoded_start_time}/{encoded_end_time}"
-        logger.debug("MNT endpoint", endpoint=endpoint)
-        logger.info("Fetching authenticated sessions via AuthList API", minutes=minutes)
-        response = await self.mnt_client.get(endpoint)
-        parsed_data = parse_active_session_xml(response.text)
-        active_session_list = ActiveSessionList(**parsed_data)
-        logger.info("Fetched authenticated sessions", count=len(active_session_list.sessions), minutes=minutes)
-        return active_session_list.sessions
+        endpoint = f"Session/AuthList/{encoded_start_time}/null"
+        predicate = self._build_session_predicate(**filters)
+
+        logger.info("Streaming authenticated sessions via AuthList API", minutes=minutes)
+        async with self.gate.guard():
+            async with self.mnt_client.get_stream(endpoint) as response:
+                with tempfile.SpooledTemporaryFile(max_size=64 * 1024 * 1024) as buf:
+                    async for chunk in response.aiter_bytes():
+                        buf.write(chunk)
+                    buf.seek(0)
+                    # The iterparse walk is synchronous and CPU-bound (and may
+                    # read from a spilled-to-disk temp file). Run it off the
+                    # event loop so a large parse cannot stall unrelated calls
+                    # -- essential once ISE_AUTHLIST_MAX_CONCURRENCY > 1, where
+                    # multiple parses would otherwise serialize on the loop.
+                    retained, total_matched = await asyncio.to_thread(
+                        iter_filter_active_sessions, buf, predicate, retention_cap
+                    )
+        sessions = [ActiveSession(**d) for d in retained]
+        logger.info("Streamed authenticated sessions", total_matched=total_matched, retained=len(sessions))
+        return sessions, total_matched
 
     @staticmethod
-    def _filter_sessions(
-        sessions: List[ActiveSession],
+    def _build_session_predicate(
         username: Optional[str] = None,
         calling_station_id: Optional[str] = None,
         nas_ip_address: Optional[str] = None,
         framed_ip_address: Optional[str] = None,
         server: Optional[str] = None,
-        minutes: int = 1440,
-    ) -> Tuple[List[ActiveSession], dict]:
-        """Apply client-side filters on a list of active sessions.
+    ):
+        """Build a per-session predicate for streaming filter.
 
-        All filter values must be pre-validated and normalized by the caller.
-        Returns (filtered_sessions, filters_applied). No I/O.
+        Filter values must be pre-validated and normalized by the caller
+        (calling_station_id already normalized via validate_mac_address).
+        The session's own MAC is normalized here before comparison.
         """
-        filters_applied: dict = {"minutes": minutes}
-        filtered = sessions
-        if username:
-            filtered = [s for s in filtered if s.user_name and username == s.user_name]
-            filters_applied["username"] = username
-        if calling_station_id:
-            filtered = [
-                s for s in filtered
-                if s.calling_station_id
-                and normalize_mac_address(s.calling_station_id) == calling_station_id
-            ]
-            filters_applied["calling_station_id"] = calling_station_id
-        if nas_ip_address:
-            filtered = [s for s in filtered if s.nas_ip_address and s.nas_ip_address == nas_ip_address]
-            filters_applied["nas_ip_address"] = nas_ip_address
-        if framed_ip_address:
-            filtered = [
-                s for s in filtered
-                if s.framed_ip_address and s.framed_ip_address == framed_ip_address
-            ]
-            filters_applied["framed_ip_address"] = framed_ip_address
-        if server:
-            filtered = [s for s in filtered if s.server and server == s.server]
-            filters_applied["server"] = server
-        return (filtered, filters_applied)
+        def predicate(s: dict) -> bool:
+            if username and s.get("user_name") != username:
+                return False
+            if calling_station_id:
+                raw = s.get("calling_station_id")
+                if not raw or normalize_mac_address(raw) != calling_station_id:
+                    return False
+            if nas_ip_address and s.get("nas_ip_address") != nas_ip_address:
+                return False
+            if framed_ip_address and s.get("framed_ip_address") != framed_ip_address:
+                return False
+            if server and s.get("server") != server:
+                return False
+            return True
+
+        return predicate
+
 
     async def search_active_sessions(
         self,
@@ -163,38 +177,32 @@ class SessionToolHandler:
             framed_ip_address = validate_ip_address(framed_ip_address)
 
         async with self._handle_mnt_errors("searching active sessions"):
-            all_sessions = await self._fetch_auth_list_sessions(minutes=minutes)
-
-            filtered_sessions, search_filters = self._filter_sessions(
-                all_sessions,
-                username=username,
-                calling_station_id=calling_station_id,
-                nas_ip_address=nas_ip_address,
-                framed_ip_address=framed_ip_address,
-                server=server,
-                minutes=minutes,
+            filters = {
+                "username": username,
+                "calling_station_id": calling_station_id,
+                "nas_ip_address": nas_ip_address,
+                "framed_ip_address": framed_ip_address,
+                "server": server,
+            }
+            sample_sessions, total_matching_sessions = await self._fetch_auth_list_sessions(
+                filters=filters, retention_cap=limit, minutes=minutes,
             )
-            total_matching_sessions: int = len(filtered_sessions)
-            filtered_sessions_with_limit: List[ActiveSession] = (
-                filtered_sessions[:limit] if limit < total_matching_sessions else filtered_sessions
-            )
-            sample_size: int = len(filtered_sessions_with_limit)
-            sampling_note: Optional[str] = build_sampling_note(
+            search_filters = {"minutes": minutes}
+            for key, value in filters.items():
+                if value:
+                    search_filters[key] = value
+            sample_size = len(sample_sessions)
+            sampling_note = build_sampling_note(
                 sample_size=sample_size,
                 total_found=total_matching_sessions,
                 resource="session",
             )
-
-            logger.info(
-                "Session search complete",
-                total_matching=total_matching_sessions,
-                sample_size=sample_size,
-            )
+            logger.info("Session search complete", total_matching=total_matching_sessions, sample_size=sample_size)
             return ActiveSessionSearchResult(
                 search_filters=search_filters,
                 total_matching_sessions=total_matching_sessions,
                 sample_size=sample_size,
-                sample_sessions=filtered_sessions_with_limit,
+                sample_sessions=sample_sessions,
                 sampling_note=sampling_note,
             )
 
@@ -287,18 +295,19 @@ class SessionToolHandler:
         async with self._handle_mnt_errors("searching enriched sessions"):
             has_latency_filter = min_latency_ms is not None or max_latency_ms is not None
             cap = self.ENRICHMENT_CAP if has_latency_filter else limit
-            all_sessions = await self._fetch_auth_list_sessions(minutes=minutes)
-
-            filtered_sessions, filters_applied = self._filter_sessions(
-                all_sessions,
-                username=username,
-                calling_station_id=calling_station_id,
-                minutes=minutes,
+            filters = {"username": username, "calling_station_id": calling_station_id}
+            filtered_sessions, total_sessions_found = await self._fetch_auth_list_sessions(
+                filters=filters, retention_cap=cap, minutes=minutes,
             )
-            total_sessions_found: int = len(filtered_sessions)
-            sessions_to_enrich: List[ActiveSession] = filtered_sessions[:cap]
-            enrichment_results: List[Optional[SessionDetail]] = await asyncio.gather(*[self._enrich_session(s) for s in sessions_to_enrich])
-            enriched_sessions: List[SessionDetail] = [s for s in enrichment_results if s is not None]
+            filters_applied = {"minutes": minutes}
+            if username:
+                filters_applied["username"] = username
+            if calling_station_id:
+                filters_applied["calling_station_id"] = calling_station_id
+
+            sessions_to_enrich = filtered_sessions[:cap]
+            enrichment_results = await asyncio.gather(*[self._enrich_session(s) for s in sessions_to_enrich])
+            enriched_sessions = [s for s in enrichment_results if s is not None]
 
             if has_latency_filter:
                 enriched_sessions = self._filter_sessions_by_latency(
@@ -311,7 +320,6 @@ class SessionToolHandler:
                 total_sessions_found = len(enriched_sessions)
 
             enriched_sessions = enriched_sessions[:limit]
-
             return EnrichedSessionSearchResult(
                 search_filters=filters_applied,
                 total_sessions_found=total_sessions_found,

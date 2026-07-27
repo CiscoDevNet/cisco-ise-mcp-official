@@ -497,3 +497,54 @@ class TestMNTClientDiscovery:
                 assert discover_called == []
             finally:
                 reset_per_user_credential(token)
+
+
+class TestMNTClientGetStream:
+    def setup_method(self):
+        _reset_mnt_singleton()
+
+    @pytest.mark.asyncio
+    async def test_get_stream_yields_streaming_response(self, monkeypatch):
+        import contextlib
+        from clients.mnt_client import MNTClient
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            token = set_per_user_credential(None)
+            try:
+                client = MNTClient()
+
+                # Skip discovery so the test targets streaming only.
+                async def _no_discovery():
+                    client._discovery_succeeded = True
+                monkeypatch.setattr(client, "_ensure_mnt_target", _no_discovery)
+
+                chunks = [b"<activeList>", b"</activeList>"]
+
+                class FakeResponse:
+                    status_code = 200
+                    def raise_for_status(self):
+                        return None
+                    async def aiter_bytes(self):
+                        for c in chunks:
+                            yield c
+
+                @contextlib.asynccontextmanager
+                async def fake_stream(method, url, **kwargs):
+                    assert method == "GET"
+                    yield FakeResponse()
+
+                fake_client = type("C", (), {})()
+                fake_client.is_closed = False
+                fake_client.stream = fake_stream
+                monkeypatch.setattr(client, "_get_client", AsyncMock(return_value=fake_client))
+                monkeypatch.setattr(client, "_resolve_per_call_auth", lambda: ({}, "service_account"))
+
+                got = []
+                async with client.get_stream("Session/AuthList/x/null") as resp:
+                    async for c in resp.aiter_bytes():
+                        got.append(c)
+                assert got == chunks
+            finally:
+                reset_per_user_credential(token)
