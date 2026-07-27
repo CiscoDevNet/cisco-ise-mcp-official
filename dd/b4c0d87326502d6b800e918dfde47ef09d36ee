@@ -1,0 +1,24 @@
+services/deployment_diagnostics_resolver.py
+  s_33e0452a52e371::t_9ab679b87af102 8-13
+  s_33e0452a52e371::t_88caf50de45528 106-108
+tests/test_deployment_diagnostics_resolver.py
+  s_33e0452a52e371::t_90e59c8c3f9dac 188-189
+MCP_TOOLS_CATALOG.md
+  s_33e0452a52e371::t_61180d701cfe3d 859
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "ddb4c0d87326502d6b800e918dfde47ef09d36ee",
+  "prompts": {},
+  "sessions": {
+    "s_33e0452a52e371": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c59aac9-7a2d-4b71-bbbd-aba06de59f17",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
