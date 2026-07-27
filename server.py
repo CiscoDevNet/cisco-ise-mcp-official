@@ -280,7 +280,7 @@ async def sessions_search_with_latency_details(
 @measure_time_async
 @normalize_docstring
 async def ise_investigate_aaa_failure(
-    mac_address: Annotated[Optional[str], "Endpoint MAC."] = None,
+    calling_station_id: Annotated[Optional[str], "Endpoint MAC."] = None,
     username: Annotated[Optional[str], "Username."] = None,
     minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
     limit: Annotated[int, Field(ge=1, le=10, description="Result cap.")] = 1,
@@ -298,7 +298,7 @@ async def ise_investigate_aaa_failure(
     window", not proof the auth never happened.
     """
     result: AaaFailureInvestigationResult = await failure_tool_handler.investigate_aaa_failure(
-        mac_address=mac_address,
+        mac_address=calling_station_id,
         username=username,
         minutes=minutes,
         limit=limit,
