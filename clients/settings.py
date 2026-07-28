@@ -81,7 +81,7 @@ class ISESettings(BaseSettings):
     # downloads and their parses; raise only with MnT-node headroom, since
     # each concurrent call is real work on the ISE MnT node.
     mnt_gate_max_concurrency: int = Field(
-        default=1, ge=1, le=16, validation_alias="ISE_MNT_GATE_MAX_CONCURRENCY"
+        default=1, ge=1, le=4, validation_alias="ISE_MNT_GATE_MAX_CONCURRENCY"
     )
     # Minimum seconds between the START of consecutive AuthList downloads.
     # Proactively spaces large MnT downloads (SST's manual-delay finding).
@@ -140,7 +140,7 @@ class ISESettings(BaseSettings):
     # downloads; raise it to trade memory for parallel speed. Enforced by a
     # global semaphore in LogService.
     log_download_max_concurrency: int = Field(
-        default=1, ge=1, le=16, validation_alias="LOG_DOWNLOAD_MAX_CONCURRENCY"
+        default=1, ge=1, le=4, validation_alias="ISE_LOG_DOWNLOAD_MAX_CONCURRENCY"
     )
 
     # --- Certificate-based auth + server verification -----------------

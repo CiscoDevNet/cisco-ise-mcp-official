@@ -2,8 +2,8 @@
 
 [project]
 name = "cisco-ise-mcp-server"
-version = "0.1.0"
-description = "MCP Server for Cisco ISE OpenAPI"
+version = "1.0.0"
+description = "MCP Server for Cisco ISE"
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
