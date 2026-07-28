@@ -202,7 +202,10 @@ class TestMNTClientResolveAuth:
             finally:
                 reset_per_user_credential(token)
 
-    def test_client_cert_mode_no_auth_header(self):
+    def test_client_cert_does_not_authenticate_mnt_falls_back_to_sa(self):
+        # ISE MnT does not support client-certificate auth. With a cert
+        # configured but no per-user header, MnT must use the SA Basic
+        # creds (client-level BasicAuth), NOT treat the cert as auth.
         import clients.mnt_client as mod
         from clients.request_context import set_per_user_credential, reset_per_user_credential
 
@@ -210,14 +213,37 @@ class TestMNTClientResolveAuth:
             mock_settings.api_port = 443
             mock_settings.require_per_user_credential = False
             mock_settings.client_cert_configured = True
+            mock_settings.api_username = "admin"
+            mock_settings.api_pwd = MagicMock()
             token = set_per_user_credential(None)
             try:
                 client = mod.MNTClient()
                 kwargs, label = client._resolve_per_call_auth()
-                assert label == "client_certificate"
-                assert "headers" not in kwargs or "Authorization" not in kwargs.get("headers", {})
-                # A no-op auth flow neutralises client-level BasicAuth.
-                assert isinstance(kwargs["auth"], mod._NoOpAuth)
+                assert label == "service_account"
+                assert kwargs == {}
+            finally:
+                reset_per_user_credential(token)
+
+    def test_client_cert_without_sa_creds_refuses(self):
+        # Cert configured but no SA creds and no per-user header: MnT
+        # cannot authenticate (cert is not valid MnT auth), so refuse
+        # loudly rather than send an unauthenticated request.
+        import clients.mnt_client as mod
+        from clients.exceptions import MissingServiceAccountError
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            mock_settings.require_per_user_credential = False
+            mock_settings.client_cert_configured = True
+            mock_settings.api_username = None
+            mock_settings.api_pwd = None
+            mock_settings.credential_header_name = "X-ISE-Authorization"
+            token = set_per_user_credential(None)
+            try:
+                client = mod.MNTClient()
+                with pytest.raises(MissingServiceAccountError):
+                    client._resolve_per_call_auth()
             finally:
                 reset_per_user_credential(token)
 

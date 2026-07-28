@@ -185,12 +185,12 @@ class MNTClient:
         Service-account Basic-auth is wired in as the client-level
         default only when ``API_USERNAME`` and ``API_PWD`` are both
         present. When absent, the client is built without an auth
-        flow; per-request flows that carry an
-        ``X-ISE-Authorization`` header inject their own Authorization
-        header per-call, and client-certificate auth authenticates via
-        the shared TLS context -- both are unaffected. Only requests
-        that would need the SA fallback (no header, no client cert)
-        fail loud in that configuration (see ``get()``).
+        flow; per-request flows that carry an ``X-ISE-Authorization``
+        header inject their own Authorization header per-call. Note that
+        ISE MnT does NOT support client-certificate auth, so a
+        configured client cert is not an MnT credential -- requests that
+        carry neither SA creds nor a per-user header fail loud (see
+        ``_resolve_per_call_auth``).
         """
         if self._client is not None:
             logger.debug("MNT client already set up")
@@ -209,11 +209,13 @@ class MNTClient:
         else:
             auth = None
             if settings.client_cert_configured:
-                logger.info(
-                    "MNT client: no service-account credentials in .env -- "
-                    "MNT calls authenticate with the configured client "
-                    f"certificate (or a forwarded "
-                    f"'{settings.credential_header_name}' when present)"
+                logger.warning(
+                    "MNT client: a client certificate is configured but "
+                    "ISE MnT does not support certificate auth. MNT calls "
+                    "MUST carry "
+                    f"'{settings.credential_header_name}' or you must set "
+                    "API_USERNAME / API_PWD for the service-account "
+                    "fallback; otherwise every MNT call will fail."
                 )
             else:
                 logger.info(
@@ -275,22 +277,26 @@ class MNTClient:
         Returns ``(per_call_kwargs, auth_path_label)`` where
         ``per_call_kwargs`` is spread into ``httpx.AsyncClient.get(...)``
         and ``auth_path_label`` is a stable string for logs
-        (``"per_user_credential"``, ``"client_certificate"``, or
-        ``"service_account"``).
+        (``"per_user_credential"`` or ``"service_account"``).
 
         Selection order (precedence, highest first):
           1. If the inbound MCP request carried an
              ``X-ISE-Authorization`` header, attach it verbatim plus a
              no-op ``auth=`` flow so httpx's client-level BasicAuth
              cannot overwrite us.
-          2. Else, if a client certificate is configured, send no
-             ``Authorization`` header plus a no-op ``auth=`` flow (so
-             the client-level BasicAuth can't inject SA creds); the
-             cert authenticates the request via the shared TLS context.
-          3. Else, if ``require_per_user_credential`` is True, refuse.
-          4. Else, if no SA creds are configured, refuse loudly.
-          5. Otherwise, return empty kwargs (client-level BasicAuth
+          2. Else, if ``require_per_user_credential`` is True, refuse.
+          3. Else, if no SA creds are configured, refuse loudly.
+          4. Otherwise, return empty kwargs (client-level BasicAuth
              does the work) and label it as SA fallback.
+
+        NOTE: unlike the OpenAPI clients, MnT does NOT support
+        client-certificate authentication. The ISE MnT API
+        (``/admin/API/mnt/``) only accepts HTTP Basic auth, so a
+        configured client cert is never treated as an MnT credential
+        here -- MnT still requires a per-user ``X-ISE-Authorization``
+        header or service-account Basic creds. (The cert is still
+        presented at the TLS layer via the shared SSL context, which is
+        harmless: the MnT server does not request it.)
         """
         per_user_credential = get_per_user_credential()
         if per_user_credential:
@@ -301,12 +307,6 @@ class MNTClient:
                 },
                 "per_user_credential",
             )
-        # Cert mode: client cert configured -> standalone auth. Send no
-        # Authorization header; _NoOpAuth neutralises the client-level
-        # BasicAuth so it can't inject SA creds. The cert itself (loaded
-        # in the shared TLS context) authenticates the request.
-        if settings.client_cert_configured:
-            return ({"auth": _NoOpAuth()}, "client_certificate")
         if settings.require_per_user_credential:
             raise MissingIseCredentialError(
                 "ISE_REQUIRE_PER_USER_CREDENTIAL=true but no "
@@ -315,9 +315,10 @@ class MNTClient:
             )
         if not (settings.api_username and settings.api_pwd):
             raise MissingServiceAccountError(
-                "MNT service-account fallback unavailable: "
-                "API_USERNAME / API_PWD are not configured and this "
-                "request did not carry "
+                "MNT authentication unavailable: ISE MnT does not support "
+                "client-certificate auth, so it requires HTTP Basic "
+                "credentials. API_USERNAME / API_PWD are not configured "
+                "and this request did not carry "
                 f"'{settings.credential_header_name}'. Either configure "
                 "SA creds in .env or ensure NVA forwards the header."
             )

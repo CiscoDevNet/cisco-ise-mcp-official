@@ -85,8 +85,11 @@ per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
 `ISE_CLIENT_KEY`), or the `API_USERNAME` / `API_PWD` service account. The service
 account is the fallback and is required unless a client certificate is configured
 or `ISE_REQUIRE_PER_USER_CREDENTIAL=true` forces the header — in either of those
-cases it can be left empty. See [Authentication](#authentication) for how these
-credentials and server-certificate verification fit together.
+cases it can be left empty. **Note:** the ISE MnT API does not support
+client-certificate auth, so the session/AAA-failure tools that use MnT still
+require either the per-user header or service-account credentials even in cert
+mode. See [Authentication](#authentication) for how these credentials and
+server-certificate verification fit together.
 
 ## API Endpoints
 
@@ -190,12 +193,20 @@ first that applies, in this order:
    `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. For step-by-step setup
    on the ISE side, see
    [How to configure certificate-based authentication for Cisco ISE](https://community.cisco.com/t5/security-blogs/how-to-configure-certificate-based-authentication-for-cisco-ise/bc-p/5372752).
+   **This applies only to the ISE Open APIs.** The ISE MnT API
+   (`/admin/API/mnt/`), used by the session and AAA-failure tools, does **not**
+   support certificate authentication — those tools fall back to the per-user
+   header or the service account (see below), so one of those must be available
+   even when a client certificate is configured.
 3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
-   are used when neither of the above applies.
+   are used when neither of the above applies. In cert-auth mode they remain the
+   MnT fallback, so leave them set (or forward the per-user header) if you use the
+   session/AAA-failure tools.
 
 Set `ISE_REQUIRE_PER_USER_CREDENTIAL=true` to reject any request that omits the
 per-user header instead of using the service account (a configured client
-certificate still satisfies the request).
+certificate still satisfies the Open-API request; MnT tools still require the
+header in that mode).
 
 **Server certificate verification** is **enabled by default**. To connect to ISE
 nodes presenting self-signed or internal-CA certificates, configure trust via

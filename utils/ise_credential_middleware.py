@@ -88,12 +88,18 @@ class IseCredentialMiddleware(Middleware):
             # depends on how the server is configured (see the auth
             # precedence in client_factory / mnt_client).
             if settings.client_cert_configured:
-                # A configured client cert authenticates the request on
-                # its own -- no Authorization header is sent, and this
-                # holds even under ISE_REQUIRE_PER_USER_CREDENTIAL=true.
+                # A configured client cert authenticates the OpenAPI
+                # (client_factory) path on its own -- no Authorization
+                # header is sent, even under
+                # ISE_REQUIRE_PER_USER_CREDENTIAL=true. MnT is the
+                # exception: it does NOT support certificate auth and
+                # still needs Basic creds (service-account or a
+                # forwarded per-user header).
                 next_step = (
-                    "client_factory / mnt_client will authenticate with "
-                    "the configured client certificate"
+                    "client_factory will authenticate with the configured "
+                    "client certificate; mnt_client will use the "
+                    "service-account credentials (MnT does not support "
+                    "certificate auth)"
                 )
             elif settings.require_per_user_credential:
                 next_step = (

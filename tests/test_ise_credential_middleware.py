@@ -158,10 +158,11 @@ class TestIseCredentialMiddleware:
         msg = await self._run_no_header_and_capture_log(
             client_cert_configured=True, require_per_user_credential=True
         )
-        # Cert wins over require_per_user_credential; must NOT claim SA
-        # fallback or refusal.
+        # Cert authenticates the OpenAPI path (wins over
+        # require_per_user_credential); MnT is the documented exception
+        # (no cert auth -> SA fallback). Must not claim a refusal.
         assert "client certificate" in msg
-        assert "service-account" not in msg
+        assert "certificate auth" in msg
         assert "refuse" not in msg
 
     @pytest.mark.asyncio
