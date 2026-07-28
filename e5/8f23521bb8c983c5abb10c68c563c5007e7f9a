@@ -1,0 +1,42 @@
+MCP_TOOLS_CATALOG.md
+  s_10c49ce316a727::t_56f3b765672819 22
+pyproject.toml
+  h_8174d5833ba005 5-6
+tests/test_settings_log_fields.py
+  s_10c49ce316a727::t_437cbc279e29db 17,28,36
+README.md
+  s_10c49ce316a727::t_5b51e4a657fc1e 80
+  s_10c49ce316a727::t_0ff9ee5181bfc9 337-385
+  s_10c49ce316a727::t_67f22e44774c95 84
+  s_10c49ce316a727::t_a75b59c924a57f 81-83
+  s_10c49ce316a727::t_78f982589d304c 199
+  h_8174d5833ba005 241
+  s_10c49ce316a727::t_83c76452012a0f 93-94
+  s_10c49ce316a727::t_2b4545853751ba 198,200-206
+clients/settings.py
+  s_10c49ce316a727::t_761bce49e1884f 84
+  s_10c49ce316a727::t_b131f631f8c31e 143
+.env.example
+  s_10c49ce316a727::t_94335e2f0ca95a 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "e58f23521bb8c983c5abb10c68c563c5007e7f9a",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_10c49ce316a727": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de79a961-847b-4d73-b4fe-ff93340f74ca",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
