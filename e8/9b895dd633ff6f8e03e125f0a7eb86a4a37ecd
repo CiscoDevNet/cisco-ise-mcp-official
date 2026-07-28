@@ -1,0 +1,19 @@
+uv.lock
+  s_10c49ce316a727::t_504e09369a23ac 150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "e89b895dd633ff6f8e03e125f0a7eb86a4a37ecd",
+  "prompts": {},
+  "sessions": {
+    "s_10c49ce316a727": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "de79a961-847b-4d73-b4fe-ff93340f74ca",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
