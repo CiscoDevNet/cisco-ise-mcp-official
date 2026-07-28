@@ -1,0 +1,33 @@
+README.md
+  s_f25a494659807f::t_8fddc5997ee749 196-200,202-204,208-209
+  s_f25a494659807f::t_7503c3ddf352af 88-92
+tests/test_mnt_client.py
+  s_f25a494659807f::t_33f5e69c2a65d1 205-208,216-217,222-246
+.env.example
+  s_f25a494659807f::t_be461eb67ad561 13-15
+clients/mnt_client.py
+  s_f25a494659807f::t_ca2a53e3987a6f 280
+  s_f25a494659807f::t_ca14dd10d70ed7 287-289,291-299,318-321
+  s_f25a494659807f::t_5544a2b7b9daa5 188-193
+  s_f25a494659807f::t_1d8b0c31005706 212-218
+tests/test_ise_credential_middleware.py
+  s_f25a494659807f::t_e130ad68220484 161-163,165
+utils/ise_credential_middleware.py
+  s_f25a494659807f::t_c6614e9fcab792 91-97,99-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "401a56702e40a57e6bad16a1328e1d5a70a521d3",
+  "prompts": {},
+  "sessions": {
+    "s_f25a494659807f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "17671f28-2677-49e9-8c23-3d9473a6a6e2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
