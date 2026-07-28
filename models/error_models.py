@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import ssl
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -27,6 +28,24 @@ class ToolErrorDetail(BaseModel):
 def is_error_response(data: dict) -> bool:
     """Check whether a parsed JSON dict represents a ToolErrorDetail."""
     return "error_category" in data or "error_code" in data
+
+
+def find_tls_error(exc: BaseException | None) -> ssl.SSLError | None:
+    """Walk an exception's cause/context chain for an underlying SSL error.
+
+    httpx surfaces TLS failures (untrusted CA, hostname/SAN mismatch,
+    expired certs) as httpx.ConnectError wrapping an ssl.SSLError. This
+    lets callers distinguish a TLS/cert configuration problem from a
+    genuine "host is unreachable" network failure.
+    """
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        if isinstance(cur, ssl.SSLError):
+            return cur
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return None
 
 
 def raise_tool_error(

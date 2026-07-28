@@ -10,7 +10,7 @@ from fastmcp.exceptions import ToolError as McpToolError
 
 from clients.client_factory import ClientFactory, ClientName
 from logger import logger
-from models.error_models import ErrorCategory, raise_tool_error
+from models.error_models import ErrorCategory, find_tls_error, raise_tool_error
 
 
 class BaseToolHandler:
@@ -83,6 +83,16 @@ class BaseToolHandler:
                 retry=False,
             )
         except (httpx.TimeoutException, httpx.ConnectError) as e:
+            tls = find_tls_error(e)
+            if tls is not None:
+                logger.error("ISE API TLS verification failed", operation=operation_name, error=str(tls))
+                raise_tool_error(
+                    ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
+                    f"TLS verification failed connecting to the ISE API during {operation_name}. "
+                    "Check the ISE server certificate, the trusted CA bundle, and that the "
+                    "hostname matches the certificate SAN.",
+                    retry=False,
+                )
             logger.exception("ISE API unreachable", operation=operation_name, error=str(e))
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_UNREACHABLE",

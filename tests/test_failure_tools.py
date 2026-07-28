@@ -740,6 +740,27 @@ class TestFailureToolHandlerErrors:
         assert data["retry"] is True
 
     @pytest.mark.asyncio
+    async def test_tls_verification_failure_returns_non_retryable_error(self):
+        from tools.failure_tool_handler import FailureToolHandler
+        from fastmcp.exceptions import ToolError as McpToolError
+        import httpx
+        import ssl
+
+        tls_error = httpx.ConnectError("certificate verify failed")
+        tls_error.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=tls_error)
+        handler = FailureToolHandler(mock_client)
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.investigate_aaa_failure(username="testUser")
+        data = json.loads(str(exc_info.value))
+        assert data["error_category"] == "external_error"
+        assert data["error_code"] == "ISE_TLS_VERIFICATION_FAILED"
+        assert data["retry"] is False
+
+    @pytest.mark.asyncio
     async def test_ise_500_returns_api_error(self):
         from tools.failure_tool_handler import FailureToolHandler
         from fastmcp.exceptions import ToolError as McpToolError
