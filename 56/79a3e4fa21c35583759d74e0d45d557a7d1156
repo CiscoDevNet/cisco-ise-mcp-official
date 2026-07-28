@@ -1,0 +1,43 @@
+models/error_models.py
+  s_f25a494659807f::t_370fde7d3e1489 33-50
+  s_f25a494659807f::t_0090201e274876 6
+tools/failure_tool_handler.py
+  s_f25a494659807f::t_81625429672962 21
+  s_f25a494659807f::t_a3c92908366360 123-132
+tests/test_session_tools.py
+  s_f25a494659807f::t_dc6f95106f5d67 567-596
+  s_f25a494659807f::t_de1a2cedb4cfb2 566
+tests/test_server.py
+  s_f25a494659807f::t_f7f8d13f0e3bdb 381-399
+  s_f25a494659807f::t_fcc639060b2aa1 380
+tests/test_failure_tools.py
+  s_f25a494659807f::t_94261a42190f14 743-762
+  s_f25a494659807f::t_65ff23a94c8699 742
+tools/base_tool_handler.py
+  s_f25a494659807f::t_47ec50882ebc5f 13
+  s_f25a494659807f::t_f58c5877ac5d3d 86-95
+tools/session_tool_handler.py
+  s_f25a494659807f::t_9eb6d8c57fb3b8 33
+  s_f25a494659807f::t_febfc9dc8e5a5d 58-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "5679a3e4fa21c35583759d74e0d45d557a7d1156",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_f25a494659807f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "17671f28-2677-49e9-8c23-3d9473a6a6e2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
