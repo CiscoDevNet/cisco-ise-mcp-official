@@ -2,9 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Download, extract, clean, and cache ISE node logs.
+"""Download, extract, and cache ISE node logs.
 
-See docs/superpowers/specs/2026-07-01-ise-log-reading-service-design.md.
+Downloads stream the response body to disk in fixed-size chunks (via
+``IseWebSession.stream``) so peak memory stays ~constant regardless of log
+size or how many nodes are fetched concurrently. The extracted latest member
+is served from a per-process temp cache with per-credential key isolation,
+refcount pinning, and conditional (ETag/Last-Modified) revalidation.
 """
 
 import asyncio
@@ -46,6 +50,10 @@ class LogService:
         self._cache_dir: Optional[Path] = None
         self._locks: dict = {}
         self._fetch_seq = 0
+        # Process-global cap on concurrent downloads, created lazily on first
+        # use so it binds to the running event loop and reads the configured
+        # limit at that point. See _download_semaphore().
+        self._download_sem: Optional[asyncio.Semaphore] = None
         LogService._initialized = True
         logger.info("LogService initialized")
 
@@ -75,6 +83,19 @@ class LogService:
     def _now(self) -> float:
         return time.monotonic()
 
+    def _download_semaphore(self) -> asyncio.Semaphore:
+        """Lazily create the process-global download semaphore.
+
+        Created on first use (not in __init__) so it binds to the running
+        event loop and reflects settings.log_download_max_concurrency at that
+        point. One instance for the singleton's lifetime.
+        """
+        if self._download_sem is None:
+            self._download_sem = asyncio.Semaphore(
+                settings.log_download_max_concurrency
+            )
+        return self._download_sem
+
     async def setup(self) -> None:
         if self._cache_dir is not None:
             return
@@ -95,11 +116,28 @@ class LogService:
         self._fetch_seq += 1
         token = self._fetch_seq
 
-        resp = await ise_web_session.get(url)
-        resp.raise_for_status()
-
         zip_path = self._cache_dir / f"{key}.{token}.zip"
-        zip_path.write_bytes(resp.content)
+
+        # Stream the response body to disk in fixed-size chunks. Buffering the
+        # whole zip in memory (resp.content) meant N concurrent downloads held
+        # N full zips resident at once, which exhausted the VM's RAM. Streaming
+        # keeps peak memory at ~one chunk regardless of file size OR concurrency.
+        # ETag/Last-Modified are response headers, available on the streaming
+        # response without reading the body.
+        #
+        # The global download semaphore caps how many downloads stream to disk
+        # at once, process-wide. It is acquired here (inside the per-key lock
+        # held by _get_entry) around the network I/O only; distinct keys hold
+        # distinct locks, so waiting for a download slot never blocks an
+        # unrelated key's cache hit.
+        async with self._download_semaphore():
+            async with ise_web_session.stream(url) as resp:
+                resp.raise_for_status()
+                etag = resp.headers.get("ETag")
+                last_modified = resp.headers.get("Last-Modified")
+                with open(zip_path, "wb") as dst:
+                    async for chunk in resp.aiter_bytes():
+                        dst.write(chunk)
 
         log_path = self._cache_dir / f"{key}.{token}.log"
         with zipfile.ZipFile(zip_path) as zf:
@@ -110,8 +148,8 @@ class LogService:
 
         return {
             "path": log_path,
-            "etag": resp.headers.get("ETag"),
-            "last_modified": resp.headers.get("Last-Modified"),
+            "etag": etag,
+            "last_modified": last_modified,
             "fetched_at": self._now(),
             "refcount": 0,
         }

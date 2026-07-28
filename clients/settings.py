@@ -55,6 +55,7 @@ class ISESettings(BaseSettings):
     @field_validator(
         "api_port", "api_username", "api_pwd",
         "ise_admin_session_cookie", "log_cache_ttl_s", "log_cache_dir_prefix",
+        "log_download_max_concurrency",
         "ise_client_cert", "ise_client_key", "ise_client_key_password",
         "ise_ca_bundle",
         "mnt_gate_max_concurrency", "mnt_gate_min_interval_s",
@@ -129,6 +130,17 @@ class ISESettings(BaseSettings):
     # Prefix for the per-process temp cache directory.
     log_cache_dir_prefix: str = Field(
         default="ise-logs-", min_length=1, validation_alias="LOG_CACHE_DIR_PREFIX"
+    )
+    # Max node-log downloads (ise-psc.log.zip etc.) allowed to run at once,
+    # process-wide. The certificate diagnostics resolver fans out to several
+    # PSN nodes concurrently; downloads now stream to disk so peak memory is
+    # ~one chunk each, but this is the hard ceiling on how many stream to disk
+    # simultaneously (across every resolver AND every concurrent MCP request),
+    # bounding the MCP server's download memory. Default 1 serialises
+    # downloads; raise it to trade memory for parallel speed. Enforced by a
+    # global semaphore in LogService.
+    log_download_max_concurrency: int = Field(
+        default=1, ge=1, le=16, validation_alias="LOG_DOWNLOAD_MAX_CONCURRENCY"
     )
 
     # --- Certificate-based auth + server verification -----------------

@@ -23,6 +23,43 @@ def _reset():
     mod.LogService._initialized = False
 
 
+def _fake_stream(chunks, headers=None):
+    """Build a fake ``ise_web_session.stream`` async context manager that
+    yields a streaming-style response emitting ``chunks`` via aiter_bytes().
+
+    ``chunks`` may be a flat list of bytes (same body every call) or a list
+    of per-call chunk-lists (a different body each successive call). A
+    ``.calls`` counter is attached to the returned callable.
+    """
+    import contextlib
+
+    per_call = chunks and isinstance(chunks[0], (list, tuple))
+
+    class _StreamResp:
+        def __init__(self, body_chunks):
+            self._chunks = body_chunks
+            self.status_code = 200
+            self.headers = headers or {}
+
+        def raise_for_status(self):
+            return None
+
+        async def aiter_bytes(self):
+            for c in self._chunks:
+                yield c
+
+    @contextlib.asynccontextmanager
+    async def stream(url, *, headers=None):
+        idx = fake_stream.calls
+        fake_stream.calls += 1
+        body = chunks[idx] if per_call else chunks
+        yield _StreamResp(body)
+
+    fake_stream = stream
+    fake_stream.calls = 0
+    return fake_stream
+
+
 class TestUrlAndValidation:
     def setup_method(self):
         _reset()
@@ -99,6 +136,7 @@ class TestFetchExtract:
         import services.log_service as mod
         with patch("services.log_service.settings") as s:
             s.log_cache_dir_prefix = "ise-logs-test-"
+            s.log_download_max_concurrency = 1
             svc = mod.LogService()
             await svc.setup()
             assert svc._cache_dir is not None and svc._cache_dir.exists()
@@ -109,17 +147,17 @@ class TestFetchExtract:
     @pytest.mark.asyncio
     async def test_download_extract_returns_raw_bytes(self, tmp_path):
         import services.log_service as mod
-        from unittest.mock import AsyncMock, MagicMock
         # Extraction is byte-for-byte: CRLF is preserved (no cleaning pass).
         zip_data = self._zip_bytes("iseLocalStore.log", b"hello\r\nworld\r\n")
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = zip_data
-        resp.headers = {"ETag": 'W/"1-2"', "Last-Modified": "Wed, 01 Jul 2026 07:05:01 GMT"}
+        headers = {"ETag": 'W/"1-2"', "Last-Modified": "Wed, 01 Jul 2026 07:05:01 GMT"}
+        # Feed the zip as several small chunks so the streaming write path is
+        # exercised end to end.
+        chunks = [zip_data[i:i + 4] for i in range(0, len(zip_data), 4)]
         with patch("services.log_service.settings") as s, \
              patch("services.log_service.ise_web_session") as sess:
             s.log_cache_dir_prefix = "ise-logs-test-"
-            sess.get = AsyncMock(return_value=resp)
+            s.log_download_max_concurrency = 1
+            sess.stream = _fake_stream(chunks, headers=headers)
             svc = mod.LogService()
             await svc.setup()
             try:
@@ -131,6 +169,133 @@ class TestFetchExtract:
                 assert entry["etag"] == 'W/"1-2"'
                 assert entry["last_modified"].startswith("Wed")
                 assert entry["refcount"] == 0
+            finally:
+                await svc.close()
+
+    @pytest.mark.asyncio
+    async def test_download_streams_body_never_reads_content(self, tmp_path):
+        """The zip must be assembled from streamed chunks, not a single
+        buffered .content read (the OOM root cause)."""
+        import services.log_service as mod
+        zip_data = self._zip_bytes("app.log", b"streamed-body\n")
+        chunks = [zip_data[i:i + 3] for i in range(0, len(zip_data), 3)]
+        assert len(chunks) > 1  # sanity: genuinely multiple chunks
+
+        iterated = {"count": 0}
+
+        class TrackingStreamResponse:
+            def __init__(self):
+                self.status_code = 200
+                self.headers = {"ETag": '"x"', "Last-Modified": "LM"}
+
+            def raise_for_status(self):
+                return None
+
+            @property
+            def content(self):
+                raise AssertionError(
+                    "streaming download must not touch resp.content"
+                )
+
+            async def aiter_bytes(self):
+                for c in chunks:
+                    iterated["count"] += 1
+                    yield c
+
+        import contextlib
+
+        @contextlib.asynccontextmanager
+        async def fake_stream(url, *, headers=None):
+            yield TrackingStreamResponse()
+
+        with patch("services.log_service.settings") as s, \
+             patch("services.log_service.ise_web_session") as sess:
+            s.log_cache_dir_prefix = "ise-logs-test-"
+            s.log_download_max_concurrency = 1
+            sess.stream = fake_stream
+            svc = mod.LogService()
+            await svc.setup()
+            try:
+                entry = await svc._download_and_extract(
+                    "https://h/admin/x.log.zip", "h__app"
+                )
+                # Body was consumed chunk by chunk (once per chunk), not in one read.
+                assert iterated["count"] == len(chunks)
+                assert entry["path"].read_bytes() == b"streamed-body\n"
+                assert entry["etag"] == '"x"'
+            finally:
+                await svc.close()
+
+
+class TestDownloadConcurrencyLimit:
+    def setup_method(self):
+        _reset()
+
+    def _zip_bytes(self, name, data):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr(zipfile.ZipInfo(name, date_time=(2026, 7, 1, 7, 5, 0)), data)
+        return buf.getvalue()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_downloads_bounded_by_setting(self, tmp_path):
+        """Concurrent downloads across distinct keys must not exceed
+        settings.log_download_max_concurrency simultaneously."""
+        import asyncio
+        import contextlib
+        import services.log_service as mod
+
+        zip_data = self._zip_bytes("app.log", b"data\n")
+
+        limit = 2
+        in_flight = 0
+        peak = 0
+        entered = 0
+
+        class _StreamResp:
+            status_code = 200
+            headers = {}
+            def raise_for_status(self):
+                return None
+            async def aiter_bytes(self):
+                yield zip_data
+
+        @contextlib.asynccontextmanager
+        async def slow_stream(url, *, headers=None):
+            nonlocal in_flight, peak, entered
+            in_flight += 1
+            entered += 1
+            peak = max(peak, in_flight)
+            try:
+                # Hold the "download" open long enough that every task that is
+                # ALLOWED to run concurrently overlaps here. Without a cap all
+                # 5 overlap (peak=5); a semaphore(limit) keeps peak==limit.
+                await asyncio.sleep(0.05)
+                yield _StreamResp()
+            finally:
+                in_flight -= 1
+
+        with patch("services.log_service.settings") as s, \
+             patch("services.log_service.ise_web_session") as sess:
+            s.log_cache_ttl_s = 300.0
+            s.ise_ip = "h"; s.api_port = 443
+            s.log_cache_dir_prefix = "ise-test-"
+            s.log_download_max_concurrency = limit
+            sess.stream = slow_stream
+
+            svc = mod.LogService()
+            await svc.setup()
+            try:
+                # 5 distinct hosts -> 5 distinct keys -> 5 distinct per-key
+                # locks, so only the global download semaphore bounds them.
+                async def fetch_host(i):
+                    async with svc.fetch("app", f"h{i}") as p:
+                        assert p.exists()
+
+                await asyncio.gather(*(fetch_host(i) for i in range(5)))
+                assert entered == 5
+                assert peak <= limit, f"peak downloads {peak} exceeded limit {limit}"
+                assert peak == limit, f"expected peak to reach limit {limit}, got {peak}"
             finally:
                 await svc.close()
 
@@ -235,25 +400,41 @@ class TestBorrowAndCache:
         zip_v1 = _zip_bytes("app.log", b"version1\r\n")
         zip_v2 = _zip_bytes("app.log", b"version2\r\n")
 
-        resp_v1 = MagicMock(); resp_v1.status_code = 200; resp_v1.content = zip_v1
-        resp_v1.headers = {"ETag": '"v1"', "Last-Modified": "Wed, 01 Jul 2026 07:00:00 GMT"}
-        resp_v1.raise_for_status = MagicMock()
-
-        resp_v2 = MagicMock(); resp_v2.status_code = 200; resp_v2.content = zip_v2
-        resp_v2.headers = {"ETag": '"v2"', "Last-Modified": "Wed, 01 Jul 2026 08:00:00 GMT"}
-        resp_v2.raise_for_status = MagicMock()
+        # Two successive DOWNLOADS stream distinct bodies (v1 then v2).
+        v1_chunks = [zip_v1[i:i + 8] for i in range(0, len(zip_v1), 8)]
+        v2_chunks = [zip_v2[i:i + 8] for i in range(0, len(zip_v2), 8)]
 
         with patch("services.log_service.settings") as s, \
              patch("services.log_service.ise_web_session") as sess:
             s.log_cache_ttl_s = 300.0
             s.ise_ip = "h"; s.api_port = 443
             s.log_cache_dir_prefix = "ise-test-"
+            s.log_download_max_concurrency = 1
 
-            call_count = [0]
-            async def mock_get(*args, **kwargs):
-                call_count[0] += 1
-                return resp_v1 if call_count[0] == 1 else resp_v2
-            sess.get = AsyncMock(side_effect=mock_get)
+            # v1 download carries v1 headers; v2 download carries v2 headers.
+            stream_v1 = _fake_stream(
+                v1_chunks,
+                headers={"ETag": '"v1"', "Last-Modified": "Wed, 01 Jul 2026 07:00:00 GMT"},
+            )
+            stream_v2 = _fake_stream(
+                v2_chunks,
+                headers={"ETag": '"v2"', "Last-Modified": "Wed, 01 Jul 2026 08:00:00 GMT"},
+            )
+            stream_calls = [0]
+            import contextlib as _c
+
+            @_c.asynccontextmanager
+            async def mock_stream(url, *, headers=None):
+                stream_calls[0] += 1
+                use = stream_v1 if stream_calls[0] == 1 else stream_v2
+                async with use(url, headers=headers) as resp:
+                    yield resp
+            sess.stream = mock_stream
+
+            # Past-TTL conditional revalidation hits get(); return 200 so the
+            # handler proceeds to a (streaming) supersede download.
+            reval = MagicMock(); reval.status_code = 200; reval.headers = {}
+            sess.get = AsyncMock(return_value=reval)
 
             svc = mod.LogService()
             await svc.setup()
@@ -314,20 +495,16 @@ class TestCredentialKeyedCache:
     @pytest.mark.asyncio
     async def test_different_credentials_produce_separate_cache_entries(self, tmp_path):
         import services.log_service as mod
-        from unittest.mock import AsyncMock, MagicMock
         # Two DIFFERENT credentials for the same (hostname, log_name) produce TWO downloads.
         zip_data = self._zip_bytes("app.log", b"data\n")
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = zip_data
-        resp.headers = {}
-        resp.raise_for_status = MagicMock()
+        chunks = [zip_data[i:i + 8] for i in range(0, len(zip_data), 8)]
         with patch("services.log_service.settings") as s, \
              patch("services.log_service.ise_web_session") as sess:
             s.log_cache_ttl_s = 300.0
             s.ise_ip = "h"; s.api_port = 443
             s.log_cache_dir_prefix = "ise-test-"
-            sess.get = AsyncMock(return_value=resp)
+            s.log_download_max_concurrency = 1
+            sess.stream = _fake_stream(chunks)
             svc = mod.LogService()
             await svc.setup()
             try:
@@ -340,7 +517,7 @@ class TestCredentialKeyedCache:
                     async with svc.fetch("app", "h") as path_b:
                         assert path_b.exists()
                 # Two distinct credentials → two downloads (two cache entries)
-                assert sess.get.await_count == 2
+                assert sess.stream.calls == 2
                 assert len(svc._cache) == 2
             finally:
                 await svc.close()
@@ -348,20 +525,16 @@ class TestCredentialKeyedCache:
     @pytest.mark.asyncio
     async def test_same_credential_reuses_cache_entry(self, tmp_path):
         import services.log_service as mod
-        from unittest.mock import AsyncMock, MagicMock
         # The SAME credential across two fetches produces ONE download (reuse).
         zip_data = self._zip_bytes("app.log", b"data\n")
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = zip_data
-        resp.headers = {}
-        resp.raise_for_status = MagicMock()
+        chunks = [zip_data[i:i + 8] for i in range(0, len(zip_data), 8)]
         with patch("services.log_service.settings") as s, \
              patch("services.log_service.ise_web_session") as sess:
             s.log_cache_ttl_s = 300.0
             s.ise_ip = "h"; s.api_port = 443
             s.log_cache_dir_prefix = "ise-test-"
-            sess.get = AsyncMock(return_value=resp)
+            s.log_download_max_concurrency = 1
+            sess.stream = _fake_stream(chunks)
             svc = mod.LogService()
             await svc.setup()
             try:
@@ -372,7 +545,7 @@ class TestCredentialKeyedCache:
                     async with svc.fetch("app", "h") as path_2:
                         assert path_2.exists()
                 # Same credential → reuse → single download
-                assert sess.get.await_count == 1
+                assert sess.stream.calls == 1
                 assert len(svc._cache) == 1
             finally:
                 await svc.close()

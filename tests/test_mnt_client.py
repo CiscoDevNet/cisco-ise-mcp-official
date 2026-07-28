@@ -46,6 +46,48 @@ class TestMNTClientSetup:
             await client.close()
 
     @pytest.mark.asyncio
+    async def test_setup_sets_explicit_connection_limits(self):
+        """The MnT client must cap httpx's pool well below the default 100
+        connections and stay >= the enrichment fan-out width + slack."""
+        import clients.mnt_client as mod
+        from tools.session_tool_handler import SessionToolHandler
+
+        captured = {}
+        real_async_client = httpx.AsyncClient
+
+        def spy_async_client(*args, **kwargs):
+            captured["limits"] = kwargs.get("limits")
+            return real_async_client(*args, **kwargs)
+
+        with patch("clients.mnt_client.settings") as mock_settings, \
+             patch("clients.mnt_client.build_ssl_context", return_value=None), \
+             patch("clients.mnt_client.httpx.AsyncClient", side_effect=spy_async_client):
+            mock_settings.api_port = 443
+            mock_settings.api_username = "admin"
+            mock_settings.api_pwd.get_secret_value.return_value = "secret"
+            mock_settings.connect_timeout_s = 5.0
+            mock_settings.read_timeout_s = 30.0
+            mock_settings.write_timeout_s = 10.0
+            mock_settings.pool_timeout_s = 5.0
+            mock_settings.credential_header_name = "X-ISE-Authorization"
+            client = mod.MNTClient()
+            await client.setup()
+            try:
+                limits = captured["limits"]
+                assert isinstance(limits, httpx.Limits)
+                assert limits.max_connections == 20
+                assert limits.max_keepalive_connections == 10
+                assert limits.keepalive_expiry == 5.0
+                # Coupling invariant: pool must fit the enrichment fan-out
+                # plus AuthList stream connection + headroom.
+                assert (
+                    limits.max_connections
+                    >= SessionToolHandler.ENRICHMENT_MAX_CONCURRENCY + 2
+                )
+            finally:
+                await client.close()
+
+    @pytest.mark.asyncio
     async def test_setup_idempotent(self):
         import clients.mnt_client as mod
         with patch("clients.mnt_client.settings") as mock_settings, \

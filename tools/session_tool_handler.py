@@ -241,6 +241,19 @@ class SessionToolHandler:
 
     ENRICHMENT_CAP = 100
 
+    # Max per-session enrichment GETs allowed to run concurrently WITHIN a
+    # single search_enriched_active_sessions call. Without this, a latency
+    # filter fans out up to ENRICHMENT_CAP (100) GETs at once against one MnT
+    # node, and N concurrent tool calls stack N x. This is a per-call width
+    # limiter (a local Semaphore), NOT cross-call admission control -- that
+    # remains the AuthList gate's job for the heavy download only.
+    #
+    # COUPLING: this must stay <= MNTClient's httpx max_connections minus a
+    # small slack (see clients/mnt_client.py, ~max_connections=20). If this is
+    # raised, raise max_connections in lockstep or an enriched call will
+    # pool-timeout against the client's own connection limit.
+    ENRICHMENT_MAX_CONCURRENCY = 10
+
     @staticmethod
     def _filter_sessions_by_latency(
         sessions: List[SessionDetail],
@@ -306,7 +319,20 @@ class SessionToolHandler:
                 filters_applied["calling_station_id"] = calling_station_id
 
             sessions_to_enrich = filtered_sessions[:cap]
-            enrichment_results = await asyncio.gather(*[self._enrich_session(s) for s in sessions_to_enrich])
+            # Bound the enrichment fan-out to at most ENRICHMENT_MAX_CONCURRENCY
+            # concurrent per-session GETs. A per-call Semaphore keeps this a
+            # width limiter for THIS call only (not cross-call admission). gather
+            # preserves order, and _enrich_session still returns Optional and
+            # handles its own per-session errors, so None-dropping is unchanged.
+            enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_MAX_CONCURRENCY)
+
+            async def _bounded_enrich(session: ActiveSession) -> Optional[SessionDetail]:
+                async with enrichment_semaphore:
+                    return await self._enrich_session(session)
+
+            enrichment_results = await asyncio.gather(
+                *[_bounded_enrich(s) for s in sessions_to_enrich]
+            )
             enriched_sessions = [s for s in enrichment_results if s is not None]
 
             if has_latency_filter:
