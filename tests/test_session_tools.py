@@ -564,6 +564,37 @@ class TestSessionToolHandlerSearchActiveSessions:
         assert data["retry"] is True
 
     @pytest.mark.asyncio
+    async def test_tls_verification_failure_returns_non_retryable_error(self):
+        import contextlib
+        from tools.session_tool_handler import SessionToolHandler
+        from fastmcp.exceptions import ToolError as McpToolError
+        import httpx
+        import ssl
+
+        @contextlib.asynccontextmanager
+        async def fake_get_stream(endpoint):
+            err = httpx.ConnectError("certificate verify failed")
+            err.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
+            raise err
+            yield  # unreachable but required for generator
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_get_stream
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+        handler = SessionToolHandler(mock_client, gate=_PassGate())
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions()
+        data = json.loads(str(exc_info.value))
+        assert data["error_category"] == "external_error"
+        assert data["error_code"] == "ISE_TLS_VERIFICATION_FAILED"
+        assert data["retry"] is False
+
+    @pytest.mark.asyncio
     async def test_ise_api_500_returns_structured_error(self):
         import contextlib
         from tools.session_tool_handler import SessionToolHandler

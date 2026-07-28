@@ -378,6 +378,26 @@ class TestBaseToolHandlerTransientErrors:
         assert "test_op" in data["message"]
 
     @pytest.mark.asyncio
+    async def test_tls_error_raises_tls_verification_failed_without_retry(self):
+        import httpx
+        import ssl
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler = self._make_handler()
+        tls_error = httpx.ConnectError("certificate verify failed")
+        tls_error.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
+        failing_fn = AsyncMock(side_effect=tls_error)
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.execute_api_call(failing_fn, "tls_op")
+
+        data = json.loads(str(exc_info.value))
+        assert data["error_category"] == "external_error"
+        assert data["error_code"] == "ISE_TLS_VERIFICATION_FAILED"
+        assert data["retry"] is False
+        assert "tls_op" in data["message"]
+
+    @pytest.mark.asyncio
     async def test_timeout_raises_ise_unreachable_with_retry(self):
         import httpx
         from fastmcp.exceptions import ToolError as McpToolError

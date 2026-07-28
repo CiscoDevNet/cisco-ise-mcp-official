@@ -30,7 +30,7 @@ from models.session_models import (
     SessionDetail,
 )
 from fastmcp.exceptions import ToolError as McpToolError
-from models.error_models import ErrorCategory, raise_tool_error
+from models.error_models import ErrorCategory, find_tls_error, raise_tool_error
 
 
 class SessionToolHandler:
@@ -55,6 +55,16 @@ class SessionToolHandler:
         try:
             yield
         except (httpx.TimeoutException, httpx.ConnectError) as e:
+            tls = find_tls_error(e)
+            if tls is not None:
+                logger.error("ISE MNT API TLS verification failed", error=str(tls))
+                raise_tool_error(
+                    ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
+                    "TLS verification failed connecting to the ISE MNT API. Check the ISE "
+                    "server certificate, the trusted CA bundle, and that the hostname matches "
+                    "the certificate SAN.",
+                    retry=False,
+                )
             logger.exception("ISE MNT API unreachable", error=str(e))
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_UNREACHABLE",
