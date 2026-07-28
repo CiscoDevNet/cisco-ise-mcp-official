@@ -19,7 +19,7 @@ This document provides a comprehensive reference for all MCP tools exposed by th
 
 Tools for monitoring and searching authenticated network sessions from the past X minutes.
 
-**Backpressure (`ISE_BUSY`):** The four session tools below download all sessions in the requested window from the ISE MnT node. Only one download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Four env tunables control concurrency and backoff: `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1), `ISE_MNT_GATE_MIN_INTERVAL_S` (default 0.0), `ISE_MNT_GATE_BACKOFF_BASE_S` (default 5.0), `ISE_MNT_GATE_BACKOFF_MAX_S` (default 300.0). See the [README Session tools section](README.md#session-tools-resource-usage--backpressure) for the full table and guidance.
+**Backpressure (`ISE_BUSY`):** The four session tools below download all sessions in the requested window from the ISE MnT node. Only one download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Four env tunables control concurrency and backoff: `ISE_MNT_GATE_MAX_CONCURRENCY` (default 1), `ISE_MNT_GATE_MIN_INTERVAL_S` (default 0.0), `ISE_MNT_GATE_BACKOFF_BASE_S` (default 5.0), `ISE_MNT_GATE_BACKOFF_MAX_S` (default 300.0). See the [README Considerations → Load on MnT nodes](README.md#load-on-mnt-nodes) section and the Configuration table for the full details and guidance.
 
 ### active_sessions_search
 

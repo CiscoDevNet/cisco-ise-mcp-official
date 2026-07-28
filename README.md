@@ -77,6 +77,11 @@ The server will be available at `http://localhost:5000`
 | `ISE_VERIFY_SERVER_CERT` | Verify the ISE server certificate | `true` | No |
 | `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
 | `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
+| `ISE_MNT_GATE_MAX_CONCURRENCY` | Max concurrent heavy MnT reads (AuthList downloads and deployment-diagnostics summary), 1–4 | `1` | No |
+| `ISE_MNT_GATE_MIN_INTERVAL_S` | Min seconds between heavy MnT read starts (0 = off); raise to space large reads on big deployments | `0.0` | No |
+| `ISE_MNT_GATE_BACKOFF_BASE_S` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout) | `5.0` | No |
+| `ISE_MNT_GATE_BACKOFF_MAX_S` | Circuit-breaker max backoff | `300.0` | No |
+| `ISE_LOG_DOWNLOAD_MAX_CONCURRENCY` | Max node-log (`.log.zip`) downloads in flight at once, 1–4 | `1` | No |
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
 
@@ -85,11 +90,8 @@ per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
 `ISE_CLIENT_KEY`), or the `API_USERNAME` / `API_PWD` service account. The service
 account is the fallback and is required unless a client certificate is configured
 or `ISE_REQUIRE_PER_USER_CREDENTIAL=true` forces the header — in either of those
-cases it can be left empty. **Note:** the ISE MnT API does not support
-client-certificate auth, so the session/AAA-failure tools that use MnT still
-require either the per-user header or service-account credentials even in cert
-mode. See [Authentication](#authentication) for how these credentials and
-server-certificate verification fit together.
+cases it can be left empty. See [Authentication](#authentication) for how these
+credentials and server-certificate verification fit together.
 
 ## API Endpoints
 
@@ -193,11 +195,15 @@ first that applies, in this order:
    `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. For step-by-step setup
    on the ISE side, see
    [How to configure certificate-based authentication for Cisco ISE](https://community.cisco.com/t5/security-blogs/how-to-configure-certificate-based-authentication-for-cisco-ise/bc-p/5372752).
-   **This applies only to the ISE Open APIs.** The ISE MnT API
-   (`/admin/API/mnt/`), used by the session and AAA-failure tools, does **not**
-   support certificate authentication — those tools fall back to the per-user
-   header or the service account (see below), so one of those must be available
-   even when a client certificate is configured.
+
+   > **Note:** Certificate auth covers the ISE Open APIs only — not the MnT API.
+   > The ISE MnT API (`/admin/API/mnt/`) does **not** support certificate
+   > authentication. The tools that use MnT — the session-search tools, the
+   > AAA-failure investigator, and `ise_deployment_health` with
+   > `diagnostics=true` — therefore fall back to the per-user header or the
+   > service account (see below). **One of those must be available even when a
+   > client certificate is configured**, or those tools will not work.
+
 3. **Service account** — the `API_USERNAME` / `API_PWD` credentials from `.env`
    are used when neither of the above applies. In cert-auth mode they remain the
    MnT fallback, so leave them set (or forward the per-user header) if you use the
@@ -232,7 +238,7 @@ mapped to one of the ERS roles. Grant the **narrowest** role that works:
   workflow genuinely needs writes.
 - **Super Admin** — can access all API services; avoid using it for automation.
 
-### Prefer certificate-based authentication
+### Certificate-based authentication
 
 Certificate-based authentication for the ISE APIs is supported from **Cisco ISE
 Release 3.3 onwards** (see the
@@ -324,41 +330,59 @@ To remove it: `Remove-Secret -Name ise-api-pwd -Vault LocalStore`.
 > so the secret is never persisted to `.env`. Leave the corresponding key out of
 > your `.env` file so the value from the environment is used.
 
-## Session tools: resource usage & backpressure
-
-The four session tools (`active_sessions_search`, `sessions_search_with_advanced_details`, `sessions_search_with_policy_details`, `sessions_search_with_latency_details`) download all sessions in the requested window from the ISE MnT node. Memory on the MCP server is now bounded (streaming parse; only a small sample is retained) — no longer multi-GB — but MnT still does real work per call, and larger `minutes`/`limit` increase that cost.
-
-Only one such download runs at a time by default; concurrent or too-rapid calls receive a retryable `ISE_BUSY` error. Clients should back off and retry.
-
-The four env tunables, as a table, with defaults:
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `ISE_MNT_GATE_MAX_CONCURRENCY` | `1` | Max concurrent heavy MnT reads (AuthList downloads and deployment-diagnostics summary). |
-| `ISE_MNT_GATE_MIN_INTERVAL_S` | `0.0` | Min seconds between heavy MnT read starts (0 = off). Raise to proactively space large reads on big deployments. |
-| `ISE_MNT_GATE_BACKOFF_BASE_S` | `5.0` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout). |
-| `ISE_MNT_GATE_BACKOFF_MAX_S` | `300.0` | Circuit-breaker max backoff. |
-
-**Guidance:** pass narrow filters (username / MAC / NAS IP) to reduce load; use `ise_investigate_aaa_failure` (bounded, no full download) for failure lookups.
-
 ## Available Tools
 
 See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
 
-## Limitations
+## Considerations
 
-- **Log fetching depends on a prior UI download.** Log data is retrieved through
-  ISE's web server (the UI download mechanism), not a dedicated log API. A given
-  log file can only be fetched if it has been **downloaded from the ISE UI at
-  least once before**; if that manual download was never performed, the log fetch
-  will not succeed. This does **not** break the tool — the affected tool still
-  returns its other results gracefully, and only the log-derived portion of the
-  output is unavailable.
-- **Log fetching may work only with username/password authentication.** Because
-  logs go through ISE's web server rather than the API, log fetching is expected
-  to work with the service-account (`API_USERNAME` / `API_PWD`) or per-user
-  `X-ISE-Authorization` credential flows, but not with client-certificate
-  authentication. Other tool results are unaffected under cert auth.
+### Log downloads
+
+Some tools enrich their results by reading ISE node logs — for example,
+`ise_diagnose_certificate_issues` scans `ise-psc.log` on PSN nodes for
+certificate/TLS error signals. Check [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md)
+for which tools read logs and which log files they need. A few things to know:
+
+- **A log must have been downloaded from the ISE UI at least once before.** Log
+  data is retrieved through ISE's web server (the UI download mechanism), not a
+  dedicated log API, so a given log file can only be fetched once it has been
+  downloaded from the ISE admin UI at least once — under
+  **Operations → Troubleshoot → Download Logs → *(ISE node)***. If that manual
+  download was never performed, the log fetch will not succeed. This does **not**
+  break the tool: it still returns its other results gracefully, and only the
+  log-derived portion of the output is unavailable.
+- **The account needs permission to download logs.** The credential used must
+  have sufficient privileges on the ISE admin UI to access the Download Logs
+  page for the target node.
+- **Log downloads work with username/password auth only — not client
+  certificates.** Because logs go through ISE's web server rather than the API,
+  log fetching works with the service-account (`API_USERNAME` / `API_PWD`) or
+  per-user `X-ISE-Authorization` credential flows, but **not** with
+  client-certificate authentication. Other tool results are unaffected under
+  cert auth.
+- **Concurrency is bounded.** Concurrent node-log downloads are capped by
+  `ISE_LOG_DOWNLOAD_MAX_CONCURRENCY` (see the [Configuration](#configuration)
+  table).
+
+### Load on MnT nodes
+
+Several tools query the ISE Monitoring & Troubleshooting (MnT) APIs — the four
+session-search tools (`active_sessions_search`,
+`sessions_search_with_advanced_details`, `sessions_search_with_policy_details`,
+`sessions_search_with_latency_details`), the AAA-failure investigator, and
+`ise_deployment_health` with `diagnostics=true`. These are real work on the MnT
+node, and the session tools download all sessions in the requested window, so
+larger `minutes`/`limit` values cost more. To keep this from overloading MnT,
+heavy MnT reads are serialized by default; concurrent or too-rapid calls receive
+a retryable `ISE_BUSY` error that clients should back off and retry.
+
+The `ISE_MNT_GATE_*` env vars in the [Configuration](#configuration) table tune
+this backpressure. **The defaults are intentionally restrictive** (one heavy read
+at a time). Raise the limits only with care and with headroom on your MnT node —
+each concurrent call is genuine load on ISE, so be mindful of the resource
+consumption you're adding. Passing narrow filters (username / MAC / NAS IP) and
+using `ise_investigate_aaa_failure` (bounded, no full download) for failure
+lookups also reduces load.
 
 ## Development
 
