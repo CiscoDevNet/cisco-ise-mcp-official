@@ -1,0 +1,23 @@
+server.py
+  s_62599af5376e33::t_ce4d9c44cb26e4 533
+README.md
+  s_62599af5376e33::t_232c1e148e094d 466-471
+tests/test_server.py
+  s_62599af5376e33::t_637c88b15eb880 524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "0c289a645b9298c3080ec904677c82083d359145",
+  "prompts": {},
+  "sessions": {
+    "s_62599af5376e33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a33cb159-2b0c-4cd0-9676-bed78a0112c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
