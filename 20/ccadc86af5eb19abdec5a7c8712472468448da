@@ -1,0 +1,51 @@
+clients/settings.py
+  s_a9f1a9c829ebde::t_23ba5c2cf8c5c3 83-90
+tools/base_tool_handler.py
+  s_a9f1a9c829ebde::t_595330cae3882b 93-102,104-107
+  s_a9f1a9c829ebde::t_b7d77523dd9f27 13-18
+models/error_models.py
+  s_a9f1a9c829ebde::t_e801434bf2ff71 53,57-70
+  s_a9f1a9c829ebde::t_63f205cacb09d5 51-52,54-56
+tests/test_server.py
+  s_a9f1a9c829ebde::t_b6f5b6410d2222 401-423
+  s_a9f1a9c829ebde::t_1b81fe53394efb 400
+tests/test_tls.py
+  s_a9f1a9c829ebde::t_b00c5e52b7a27c 152-195
+README.md
+  s_a9f1a9c829ebde::t_c2cb3ecf3e5ac1 80
+.env.example
+  s_a9f1a9c829ebde::t_6c173e8ab03282 30-31
+tests/test_failure_tools.py
+  s_a9f1a9c829ebde::t_b40851c4af9e7a 764-787
+  s_a9f1a9c829ebde::t_50c7e6fa5ab2ba 763
+tools/session_tool_handler.py
+  s_a9f1a9c829ebde::t_3f69873ba46933 33-38
+  s_a9f1a9c829ebde::t_6a631544fb2a25 65-74,76-78
+tools/failure_tool_handler.py
+  s_a9f1a9c829ebde::t_5a623ff44193bb 21-26
+  s_a9f1a9c829ebde::t_1e1edda0061ce7 130-139,141-143
+tests/test_session_tools.py
+  s_a9f1a9c829ebde::t_010f184167cfbc 598-631
+  s_a9f1a9c829ebde::t_6a1e989f71b9b3 597
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "20ccadc86af5eb19abdec5a7c8712472468448da",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_a9f1a9c829ebde": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84fb565e-9a17-4abf-a6a4-e8a0bcf60996",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
