@@ -463,6 +463,12 @@ Then regenerate all enabled clients by running the script:
 └── docker-compose.yml    # Docker orchestration
 ```
 
+## Support
+
+For any issues, please
+[open a GitHub issue](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues).
+See [CONTRIBUTING.md](/CONTRIBUTING.md) for details.
+
 ## License
 
 Licensed under Apache 2.0.

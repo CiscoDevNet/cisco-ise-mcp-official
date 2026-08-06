@@ -521,6 +521,7 @@ class TestMain:
                 transport="streamable-http",
                 host="0.0.0.0",
                 port=5000,
+                show_banner=False,
             )
             assert exit_code == 0
 
