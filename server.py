@@ -530,7 +530,7 @@ async def ise_search_authentication_rules(
 def main():
     try:
         logger.info("Starting ISE MCP Server...")
-        ise_mcp_server.run(transport="streamable-http", host=HOST, port=PORT)
+        ise_mcp_server.run(transport="streamable-http", host=HOST, port=PORT, show_banner=False)
     except Exception as e:
         logger.exception("Error starting ISE MCP Server", error=str(e))
         return 1

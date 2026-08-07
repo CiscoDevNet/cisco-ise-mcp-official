@@ -24,7 +24,12 @@ tools, inspect their schemas, and call them from natural language prompts.
 
 ### 1. Clone and Setup
 
+Clone the repository to get the latest code from the default branch. For a
+specific version, download the corresponding release from the
+[Releases](https://github.com/CiscoDevNet/cisco-ise-mcp-official/releases) page.
+
 ```bash
+# Latest code; see Releases for specific versions
 git clone https://github.com/CiscoDevNet/cisco-ise-mcp-official.git
 cd cisco-ise-mcp-official
 
@@ -462,6 +467,12 @@ Then regenerate all enabled clients by running the script:
 ├── main.py               # Alternative entry point
 └── docker-compose.yml    # Docker orchestration
 ```
+
+## Support
+
+For any issues, please
+[open a GitHub issue](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues).
+See [CONTRIBUTING.md](/CONTRIBUTING.md) for details.
 
 ## License
 
