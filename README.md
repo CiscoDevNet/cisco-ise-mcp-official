@@ -24,7 +24,12 @@ tools, inspect their schemas, and call them from natural language prompts.
 
 ### 1. Clone and Setup
 
+Clone the repository to get the latest code from the default branch. For a
+specific version, download the corresponding release from the
+[Releases](https://github.com/CiscoDevNet/cisco-ise-mcp-official/releases) page.
+
 ```bash
+# Latest code; see Releases for specific versions
 git clone https://github.com/CiscoDevNet/cisco-ise-mcp-official.git
 cd cisco-ise-mcp-official
 
