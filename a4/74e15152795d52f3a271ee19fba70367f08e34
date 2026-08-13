@@ -1,0 +1,24 @@
+.github/workflows/tests.yml
+  s_457d536346bf24::t_03cabe9aa2981f 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a474e15152795d52f3a271ee19fba70367f08e34",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_457d536346bf24": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "48bc8747-e919-4aae-95cc-07069ca56a72",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
