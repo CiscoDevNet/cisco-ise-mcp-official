@@ -11,21 +11,35 @@ reuses them for ISE log timestamp parsing.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-# Leading timestamp: "2026-07-01 00:02:37.362 +00:00"
+# Leading timestamp, in either shape ISE emits:
+#   "2026-07-01 00:02:37.362 +00:00"  (dot millis, explicit offset)
+#   "2026-08-17 18:10:45,180"         (comma millis, no offset — ise-psc.log)
+# The offset is optional and the millisecond separator may be '.' or ','.
 _TS_RE = re.compile(
-    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [+-]\d{2}:\d{2})"
+    r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})[.,](\d{3})(?:\s+([+-]\d{2}:?\d{2}))?"
 )
 _TS_FMT = "%Y-%m-%d %H:%M:%S.%f %z"
+_TS_FMT_NO_TZ = "%Y-%m-%d %H:%M:%S.%f"
 
 
 def _parse_ts(line: str) -> Optional[datetime]:
+    """Parse a leading ISE log timestamp into a timezone-aware datetime.
+
+    Offset-less timestamps are treated as UTC so that every parsed value stays
+    mutually comparable — callers sort and window mixed shapes together.
+    """
     m = _TS_RE.match(line)
     if not m:
         return None
+
+    stamp = f"{m.group(1)}.{m.group(2)}"
+    offset = m.group(3)
     try:
-        return datetime.strptime(m.group(1), _TS_FMT)
+        if offset:
+            return datetime.strptime(f"{stamp} {offset}", _TS_FMT)
+        return datetime.strptime(stamp, _TS_FMT_NO_TZ).replace(tzinfo=timezone.utc)
     except ValueError:
         return None

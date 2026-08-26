@@ -315,6 +315,92 @@ class TestCertificatesToolHandler:
         assert len(result.certificates) == 1
 
 
+class TestTrustedCertRequestAndOrdering:
+    """ISE rejects `filter` on /api/v1/certs/trusted-certificate with HTTP 422 and
+    silently ignores `sort`/`sortBy`, so the window filter and ordering must be
+    applied client-side."""
+
+    def _make_handler(self):
+        from tools.certificates_tool_handler import CertificatesToolHandler
+
+        factory = MagicMock()
+        factory.get_client.return_value = MagicMock()
+        return CertificatesToolHandler(factory, MagicMock())
+
+    @staticmethod
+    def _mock_cert(raw, fname):
+        m = MagicMock()
+        m.expiration_date = raw["expirationDate"]
+        m.valid_from = raw["validFrom"]
+        m.status = raw["status"]
+        m.friendly_name = fname
+        m.trusted_for = "Infrastructure"
+        m.id = f"cert-{fname}"
+        m.additional_properties = {}
+        return m
+
+    @pytest.mark.asyncio
+    async def test_does_not_send_filter_or_sort_params(self):
+        handler = self._make_handler()
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"response": []}
+            await handler.check_expiring_trusted_certificates(
+                expiry_days=30, include_expired=True, status_filter="all", limit=10
+            )
+
+        kw = mock_exec.call_args.kwargs
+        assert "filter_" not in kw, "ISE returns 422 when `filter` is sent to this endpoint"
+        assert "sort" not in kw
+        assert "sort_by" not in kw
+        assert kw["page"] == 1
+        assert kw["size"] > 0
+
+    @pytest.mark.asyncio
+    async def test_returns_soonest_expiring_when_server_order_is_arbitrary(self):
+        handler = self._make_handler()
+        far = _make_raw_cert(days_from_now=100, friendly_name="FAR")
+        soon = _make_raw_cert(days_from_now=5, friendly_name="SOON")
+        mid = _make_raw_cert(days_from_now=40, friendly_name="MID")
+
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec, \
+             patch("tools.certificates_tool_handler.TrustCertificateResponse") as mock_cls:
+            mock_exec.return_value = {"response": [far, soon, mid], "nextPage": None}
+            mock_cls.from_dict.side_effect = [
+                self._mock_cert(far, "FAR"),
+                self._mock_cert(soon, "SOON"),
+                self._mock_cert(mid, "MID"),
+            ]
+
+            result = await handler.check_expiring_trusted_certificates(
+                expiry_days=200, include_expired=True, status_filter="all", limit=2
+            )
+
+        assert [c.friendly_name for c in result.certificates] == ["SOON", "MID"]
+        assert result.summary.total_matched == 3
+        assert result.summary.earliest_expiration == result.certificates[0].expiration_date
+
+    @pytest.mark.asyncio
+    async def test_excludes_certs_expiring_after_window(self):
+        handler = self._make_handler()
+        inside = _make_raw_cert(days_from_now=10, friendly_name="IN")
+        outside = _make_raw_cert(days_from_now=400, friendly_name="OUT")
+
+        with patch.object(handler, "execute_api_call", new_callable=AsyncMock) as mock_exec, \
+             patch("tools.certificates_tool_handler.TrustCertificateResponse") as mock_cls:
+            mock_exec.return_value = {"response": [inside, outside], "nextPage": None}
+            mock_cls.from_dict.side_effect = [
+                self._mock_cert(inside, "IN"),
+                self._mock_cert(outside, "OUT"),
+            ]
+
+            result = await handler.check_expiring_trusted_certificates(
+                expiry_days=30, include_expired=True, status_filter="all", limit=10
+            )
+
+        assert [c.friendly_name for c in result.certificates] == ["IN"]
+        assert result.summary.total_matched == 1
+
+
 class TestDiagnoseCertificateIssues:
     def _handler(self, resolver):
         from tools.certificates_tool_handler import CertificatesToolHandler
