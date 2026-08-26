@@ -1,0 +1,37 @@
+services/system_stats_parser.py
+  s_4635758a35e350::t_87ab4a133b91b7 14,17-20,22,25,29-33,37-39,41-43
+tests/test_certificate_log_scanner.py
+  s_4635758a35e350::t_6a15f7293290c8 84-138
+tests/test_certificates_tool_handler.py
+  s_4635758a35e350::t_76c0f1d2c0d552 318-403
+tools/certificates_tool_handler.py
+  s_4635758a35e350::t_5dc83b308090ea 190-192,217-221,232-241
+tests/test_system_stats_parser.py
+  s_9654b44b192d45::t_f202d2c8158cce 1-55
+services/certificate_log_scanner.py
+  s_4635758a35e350::t_0c9915c537b2a0 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3705101277cfcf34f017f565892c52e95633b4cb",
+  "prompts": {},
+  "sessions": {
+    "s_4635758a35e350": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c7a02f5-df8a-480e-a541-cdb63cbb0092",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    },
+    "s_9654b44b192d45": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d565022a-0211-4235-a941-a1cd4d548f3d",
+        "model": "unknown"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
