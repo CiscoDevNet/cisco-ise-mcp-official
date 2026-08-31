@@ -179,3 +179,94 @@ class TestIseCredentialMiddleware:
             client_cert_configured=False, require_per_user_credential=False
         )
         assert "service-account" in msg
+
+
+class TestValidationErrorTranslation:
+    """FastMCP lets pydantic's ValidationError escape tool-argument validation.
+
+    Unwrapped, its repr reads like an internal crash, so agents retry the same
+    bad call instead of correcting it. The middleware must convert it into a
+    CLIENT_ERROR that names the offending fields. CSCwv61926.
+    """
+
+    @staticmethod
+    def _validation_error(func, **kwargs):
+        """Produce a real ValidationError the way FastMCP does.
+
+        FastMCP validates tool arguments against the handler's signature, so
+        ``validate_call`` reproduces the exact error `type` values the
+        middleware branches on -- notably ``unexpected_keyword_argument``,
+        which a plain BaseModel never emits.
+        """
+        from pydantic import ValidationError, validate_call
+
+        try:
+            validate_call(func)(**kwargs)
+        except ValidationError as exc:
+            return exc
+        raise AssertionError("expected validate_call to reject these kwargs")
+
+    async def _run(self, exc, tool_name):
+        from fastmcp.exceptions import ToolError
+        from utils.ise_credential_middleware import IseCredentialMiddleware
+
+        mock_context = MagicMock()
+        mock_context.message.name = tool_name
+
+        async def call_next(ctx):
+            raise exc
+
+        with patch("utils.ise_credential_middleware.get_http_request", return_value=None):
+            with pytest.raises(ToolError) as excinfo:
+                await IseCredentialMiddleware().on_request(mock_context, call_next)
+        return str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_unexpected_keyword_names_the_offending_params(self):
+        def ise_investigate_aaa_failure(mac_address: str = None, username: str = None):
+            ...
+
+        exc = self._validation_error(
+            ise_investigate_aaa_failure, nas_ip_address="10.0.0.1"
+        )
+        msg = await self._run(exc, "ise_investigate_aaa_failure")
+
+        assert "Unsupported parameter(s)" in msg
+        assert "nas_ip_address" in msg
+        # Bespoke hint for this tool's narrow parameter surface.
+        assert "mac_address and username" in msg
+
+    @pytest.mark.asyncio
+    async def test_unexpected_keyword_without_hint_omits_tool_advice(self):
+        def active_sessions_search(username: str = None):
+            ...
+
+        exc = self._validation_error(active_sessions_search, bogus=1)
+        msg = await self._run(exc, "active_sessions_search")
+
+        assert "Unsupported parameter(s): bogus." in msg
+        assert "mac_address and username" not in msg
+
+    @pytest.mark.asyncio
+    async def test_type_error_reports_field_reason_and_value(self):
+        def active_sessions_search(limit: int = 10):
+            ...
+
+        exc = self._validation_error(active_sessions_search, limit="not-a-number")
+        msg = await self._run(exc, "active_sessions_search")
+
+        assert "Invalid tool input" in msg
+        assert "limit" in msg
+        assert "not-a-number" in msg
+
+    @pytest.mark.asyncio
+    async def test_credential_still_reset_when_validation_fails(self):
+        from clients.request_context import get_per_user_credential
+
+        def active_sessions_search(limit: int = 10):
+            ...
+
+        exc = self._validation_error(active_sessions_search, limit="x")
+        await self._run(exc, "active_sessions_search")
+
+        assert get_per_user_credential() is None

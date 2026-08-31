@@ -80,6 +80,22 @@ __all__ = [
 ]
 
 
+# Attached to every MnT request to suppress the shared client's cookie jar.
+#
+# The singleton ``httpx.AsyncClient`` accumulates ISE ``Set-Cookie`` values
+# (notably ``JSESSIONID``) across calls, and ISE honours a presented session
+# cookie OVER the ``Authorization`` header. So a cookie minted for one user
+# leaks onto the next user's request: if the second user has higher privileges
+# than the first, ISE authorizes against the stale lower-privilege session and
+# returns 401 until it expires server-side (~1 hour). CSCwv87002.
+#
+# WHY AN EMPTY STRING RATHER THAN A CLIENT SETTING: httpx has no switch to
+# disable the jar. ``http.cookiejar.CookieJar.add_cookie_header`` injects the
+# jar's cookies only ``if not request.has_header("Cookie")``, so presenting an
+# explicit (empty) Cookie header is the supported way to opt one request out.
+_COOKIE_SUPPRESSION_HEADER = {"Cookie": ""}
+
+
 class _NoOpAuth(httpx.Auth):
     """An ``httpx.Auth`` flow that yields the request unmodified.
 
@@ -297,12 +313,18 @@ class MNTClient:
         header or service-account Basic creds. (The cert is still
         presented at the TLS layer via the shared SSL context, which is
         harmless: the MnT server does not request it.)
+
+        An empty ``Cookie`` header is attached on EVERY path (see
+        ``_COOKIE_SUPPRESSION_HEADER``).
         """
         per_user_credential = get_per_user_credential()
         if per_user_credential:
             return (
                 {
-                    "headers": {"Authorization": per_user_credential},
+                    "headers": {
+                        "Authorization": per_user_credential,
+                        **_COOKIE_SUPPRESSION_HEADER,
+                    },
                     "auth": _NoOpAuth(),
                 },
                 "per_user_credential",
@@ -322,7 +344,7 @@ class MNTClient:
                 f"'{settings.credential_header_name}'. Either configure "
                 "SA creds in .env or ensure NVA forwards the header."
             )
-        return ({}, "service_account")
+        return ({"headers": dict(_COOKIE_SUPPRESSION_HEADER)}, "service_account")
 
     async def _ensure_mnt_target(self) -> None:
         """Run one-time MnT-FQDN discovery if it hasn't succeeded yet.

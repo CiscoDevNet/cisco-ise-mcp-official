@@ -118,6 +118,140 @@ def iter_filter_active_sessions(
     return retained, total_matched
 
 
+def _local_tag(elem) -> str:
+    """Return an element's tag with any XML namespace prefix stripped."""
+    tag = elem.tag
+    return tag.split("}", 1)[-1] if "}" in tag else tag
+
+
+def _find_local(parent, name: str):
+    """Find a direct child by local tag name, ignoring any namespace.
+
+    ``Element.find(name)`` misses namespaced children, and the MnT responses we
+    parse here are inconsistent about declaring one.
+    """
+    for child in parent:
+        if _local_tag(child) == name:
+            return child
+    return None
+
+
+def parse_session_count_xml(xml_string: str) -> int:
+    """Parse a ``<sessionCount>`` response from the MnT session-count APIs.
+
+    Shared by ``Session/ActiveCount``, ``Session/PostureCount`` and
+    ``Session/ProfilerCount``, all of which return::
+
+        <sessionCount>
+            <count>5</count>
+        </sessionCount>
+
+    Raises:
+        ET.ParseError: If the XML is malformed.
+        ValueError: If the root element is not ``sessionCount``, ``<count>`` is
+            missing/blank, or its text is not an integer.
+    """
+    try:
+        root = ET.fromstring(xml_string)
+        root_tag = _local_tag(root)
+        if root_tag != "sessionCount":
+            raise ValueError(f"Expected root element 'sessionCount', got '{root_tag}'")
+        count_elem = _find_local(root, "count")
+        if count_elem is None or not (count_elem.text and count_elem.text.strip()):
+            raise ValueError("Missing <count> element in sessionCount response")
+        return int(count_elem.text.strip())
+    except ET.ParseError as e:
+        logger.error("Failed to parse sessionCount XML", error=str(e))
+        raise
+    except (ValueError, TypeError) as e:
+        logger.error("Unexpected value in sessionCount XML", error=str(e))
+        raise
+
+
+def parse_mnt_error_body(xml_string: str) -> Optional[str]:
+    """Extract ``<internal-error-info>`` from an MnT REST error response body.
+
+    ISE returns a structured body alongside HTTP 500::
+
+        <mnt-rest-result>
+          <http-code>500</http-code>
+          <internal-error-info>Session data is not available for 4.4.4.1.</internal-error-info>
+          ...
+        </mnt-rest-result>
+
+    That text is the only place ISE says WHY the call failed -- "no such
+    session" and a genuine backend fault are both HTTP 500 -- so callers use it
+    both to build a useful error message and to tell the two apart.
+
+    Returns the text when present, else ``None`` (including for malformed or
+    unrecognised bodies) so callers can fall back to a generic message. Parsing
+    an error body must never itself raise and mask the original HTTP error.
+    """
+    try:
+        root = ET.fromstring(xml_string)
+        if _local_tag(root) != "mnt-rest-result":
+            return None
+        elem = _find_local(root, "internal-error-info")
+        if elem is not None and elem.text and elem.text.strip():
+            return elem.text.strip()
+    except Exception:  # noqa: BLE001 -- see docstring
+        logger.debug("MnT error body was not a parseable mnt-rest-result")
+    return None
+
+
+# Fields of a <sessionParameters> body that map onto ActiveSession, as
+# {ActiveSession field: sessionParameters element}. Identity apart from
+# ``server``, which MnT calls ``acs_server`` in this response shape.
+_SESSION_PARAMS_TO_ACTIVE_SESSION = {
+    "user_name": "user_name",
+    "calling_station_id": "calling_station_id",
+    "nas_ip_address": "nas_ip_address",
+    "framed_ip_address": "framed_ip_address",
+    "audit_session_id": "audit_session_id",
+    "acct_session_id": "acct_session_id",
+    "nas_ipv6_address": "nas_ipv6_address",
+    "server": "acs_server",
+}
+
+
+def parse_session_detail_as_active_session(xml_string: str) -> Dict[str, Any]:
+    """Parse a ``<sessionParameters>`` body into an ActiveSession-shaped dict.
+
+    The single-identifier MnT endpoints (``Session/MACAddress``,
+    ``Session/UserName``, ``Session/IPAddress``, ``Session/EndPointIPAddress``)
+    return the much richer ``<sessionParameters>`` document rather than
+    ``<activeList>``. This projects it down to the ActiveSession fields so a
+    direct lookup and an AuthList scan can return the same result shape.
+
+    Returns a dict suitable for ``ActiveSession(**result)``.
+
+    Raises:
+        ET.ParseError: If the XML is malformed.
+        ValueError: If the root element is not ``sessionParameters``.
+    """
+    try:
+        root = ET.fromstring(xml_string)
+        root_tag = _local_tag(root)
+        if root_tag != "sessionParameters":
+            raise ValueError(f"Expected root element 'sessionParameters', got '{root_tag}'")
+
+        raw: Dict[str, Any] = {}
+        for child in root:
+            text = child.text
+            raw[_local_tag(child)] = text.strip() if text and text.strip() else None
+
+        return {
+            field: raw.get(source)
+            for field, source in _SESSION_PARAMS_TO_ACTIVE_SESSION.items()
+        }
+    except ET.ParseError as e:
+        logger.error("Failed to parse sessionParameters XML", error=str(e))
+        raise
+    except ValueError as e:
+        logger.error("Unexpected sessionParameters XML structure", error=str(e))
+        raise
+
+
 # Keys to extract from other_attr_string (":!:" delimited Key=Value pairs)
 _OTHER_ATTR_KEYS = frozenset({
     "AuthenticationStatus",

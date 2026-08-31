@@ -160,7 +160,9 @@ class TestMNTClientResolveAuth:
                 client = mod.MNTClient()
                 kwargs, label = client._resolve_per_call_auth()
                 assert label == "service_account"
-                assert kwargs == {}
+                # No Authorization override -- client-level BasicAuth does the
+                # work. Only the cookie-jar suppression header is attached.
+                assert kwargs == {"headers": {"Cookie": ""}}
             finally:
                 reset_per_user_credential(token)
 
@@ -220,7 +222,7 @@ class TestMNTClientResolveAuth:
                 client = mod.MNTClient()
                 kwargs, label = client._resolve_per_call_auth()
                 assert label == "service_account"
-                assert kwargs == {}
+                assert kwargs == {"headers": {"Cookie": ""}}
             finally:
                 reset_per_user_credential(token)
 
@@ -260,6 +262,69 @@ class TestMNTClientResolveAuth:
                 kwargs, label = client._resolve_per_call_auth()
                 assert label == "per_user_credential"
                 assert kwargs["headers"]["Authorization"] == "Basic dXNlcjpwYXNz"
+            finally:
+                reset_per_user_credential(token)
+
+
+class TestMNTClientCookieSuppression:
+    """Every MnT call must present an empty Cookie header (CSCwv87002).
+
+    The singleton client's jar accumulates ISE JSESSIONID cookies, and ISE
+    honours a session cookie over the Authorization header -- so without this
+    a cookie from a lower-privilege user makes the next (higher-privilege)
+    user's request 401 until the ISE-side session expires.
+    """
+
+    def setup_method(self):
+        _reset_mnt_singleton()
+
+    def test_per_user_path_suppresses_cookie_jar(self):
+        import clients.mnt_client as mod
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            token = set_per_user_credential("Basic dXNlcjpwYXNz")
+            try:
+                kwargs, _ = mod.MNTClient()._resolve_per_call_auth()
+                assert kwargs["headers"]["Cookie"] == ""
+            finally:
+                reset_per_user_credential(token)
+
+    def test_service_account_path_suppresses_cookie_jar(self):
+        import clients.mnt_client as mod
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            mock_settings.require_per_user_credential = False
+            mock_settings.client_cert_configured = False
+            mock_settings.api_username = "admin"
+            mock_settings.api_pwd = MagicMock()
+            token = set_per_user_credential(None)
+            try:
+                kwargs, _ = mod.MNTClient()._resolve_per_call_auth()
+                assert kwargs["headers"]["Cookie"] == ""
+            finally:
+                reset_per_user_credential(token)
+
+    def test_suppression_header_is_not_shared_mutable_state(self):
+        """Callers merge Accept into these headers (see _discover_mnt_fqdn),
+        so the returned dict must be a fresh copy, not the module constant."""
+        import clients.mnt_client as mod
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            mock_settings.require_per_user_credential = False
+            mock_settings.client_cert_configured = False
+            mock_settings.api_username = "admin"
+            mock_settings.api_pwd = MagicMock()
+            token = set_per_user_credential(None)
+            try:
+                kwargs, _ = mod.MNTClient()._resolve_per_call_auth()
+                kwargs["headers"]["Accept"] = "application/json"
+                assert mod._COOKIE_SUPPRESSION_HEADER == {"Cookie": ""}
             finally:
                 reset_per_user_credential(token)
 

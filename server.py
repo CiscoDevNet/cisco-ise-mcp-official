@@ -464,13 +464,14 @@ async def ise_search_policy_sets(
 @measure_time_async
 @normalize_docstring
 async def ise_search_authorization_rules(
-    policy_set_name: Annotated[Optional[str], "Restrict search to this policy set (by name). Strongly recommended to narrow fan-out."] = None,
-    profile_name_filter: Annotated[Optional[str], "Case-insensitive substring matched against the rule's authorization profile name(s)."] = None,
-    security_group_filter: Annotated[Optional[str], "Case-insensitive substring matched against the rule's TrustSec SGT name."] = None,
+    policy_set_name: Annotated[Optional[str], "Restrict search to this policy set (by name). Optional — omit to search across ALL policy sets."] = None,
+    profile_name_filter: Annotated[Optional[str], "Case-insensitive EXACT match on the rule's authorization profile name (e.g. 'DenyAccess' does NOT match 'DenyAccess_Guest'). Use ise_search_authorization_profiles to find the exact name."] = None,
+    security_group_filter: Annotated[Optional[str], "Case-insensitive EXACT match on the rule's TrustSec SGT name (e.g. 'Developers' does NOT match 'Developers_Contractors')."] = None,
     state_filter: Annotated[str, "Rule state filter: 'all', 'enabled', or 'disabled'."] = "all",
-    min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Only include rules with hit_counts >= this value. Use 0 to find unused rules.")] = None,
+    min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Lower bound: keep rules with hit_counts >= this. Use for 'hit at least N times / most used'.")] = None,
+    max_hit_counts: Annotated[Optional[int], Field(ge=0, description="Upper bound: keep rules with hit_counts <= this. Use max_hit_counts=0 for 'never hit / 0 hits / unused / stale / safe to clean up', or N for 'at most N hits'.")] = None,
     name_substring: Annotated[Optional[str], "Case-insensitive substring of the rule name."] = None,
-    limit: Annotated[int, Field(ge=1, le=50, description="Max per-policy-set rules to return.")] = 25,
+    limit: Annotated[int, Field(ge=1, le=50, description="Max rules to return, after filtering, across all scanned policy sets.")] = 25,
 ) -> AuthorizationRuleSearchResult:
     """
     Find authorization rules (a.k.a. "authorization policies") across policy
@@ -478,10 +479,13 @@ async def ise_search_authorization_rules(
     exception rules.
 
     USE THIS when: which rules assign profile X, are there global exceptions
-    overriding a rule, why is a profile applied unexpectedly, find unused rules,
-    which authorization policy/rule has the most or fewest hits, rank
-    authorization rules by hit count, policy configuration questions not tied
-    to a specific live session.
+    overriding a rule, why is a profile applied unexpectedly, find unused rules
+    (max_hit_counts=0), which authorization policy/rule has the most or fewest
+    hits, rank authorization rules by hit count, policy configuration questions
+    not tied to a specific live session.
+
+    Every policy set is scanned unless one is named. Confirm coverage by
+    checking that `policy_sets_scanned` equals `policy_sets_total`.
     """
     result: AuthorizationRuleSearchResult = await policy_tool_handler.search_authorization_rules(
         policy_set_name=policy_set_name,
@@ -489,6 +493,7 @@ async def ise_search_authorization_rules(
         security_group_filter=security_group_filter,
         state_filter=state_filter,
         min_hit_counts=min_hit_counts,
+        max_hit_counts=max_hit_counts,
         name_substring=name_substring,
         limit=limit,
     )
@@ -499,10 +504,11 @@ async def ise_search_authorization_rules(
 @measure_time_async
 @normalize_docstring
 async def ise_search_authentication_rules(
-    policy_set_name: Annotated[Optional[str], "Restrict search to this policy set (by name). Strongly recommended to narrow fan-out."] = None,
-    identity_source_filter: Annotated[Optional[str], "Case-insensitive substring matched against the rule's identitySourceName (identity store)."] = None,
+    policy_set_name: Annotated[Optional[str], "Restrict search to this policy set (by name). Optional — omit to search across ALL policy sets."] = None,
+    identity_source_filter: Annotated[Optional[str], "Case-insensitive EXACT match on the rule's identitySourceName (identity store / AD join point), e.g. 'Internal Users' or 'All_AD_Join_Points'. A substring like 'AD' or 'Guest' will NOT match."] = None,
     state_filter: Annotated[str, "Rule state filter: 'all', 'enabled', or 'disabled'."] = "all",
-    min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Only include rules with hit_counts >= this value. Use 0 to find unused rules.")] = None,
+    min_hit_counts: Annotated[Optional[int], Field(ge=0, description="Lower bound: keep rules with hit_counts >= this. Use for 'hit at least N times / most used'.")] = None,
+    max_hit_counts: Annotated[Optional[int], Field(ge=0, description="Upper bound: keep rules with hit_counts <= this. Use max_hit_counts=0 for 'never hit / 0 hits / unused / stale / safe to clean up', or N for 'at most N hits'.")] = None,
     name_substring: Annotated[Optional[str], "Case-insensitive substring of the rule name."] = None,
     limit: Annotated[int, Field(ge=1, le=50, description="Max rules to return.")] = 25,
 ) -> AuthenticationRuleSearchResult:
@@ -511,14 +517,20 @@ async def ise_search_authentication_rules(
     identity store, state, hit count, or rule name. Returns identity_source_name
     and failure actions. Not tied to any live session.
 
-    USE THIS when: which authn rules use AD, find unused authn rules, lenient
-    failure actions.
+    USE THIS when: which authn rules use identity store X (pass its exact name —
+    ise_search_policy_authoring_references lists them), find unused/zero-hit
+    authn rules (max_hit_counts=0), disabled authn rules, lenient failure
+    actions.
+
+    Every policy set is scanned unless one is named. Confirm coverage by
+    checking that `policy_sets_scanned` equals `policy_sets_total`.
     """
     result: AuthenticationRuleSearchResult = await policy_tool_handler.search_authentication_rules(
         policy_set_name=policy_set_name,
         identity_source_filter=identity_source_filter,
         state_filter=state_filter,
         min_hit_counts=min_hit_counts,
+        max_hit_counts=max_hit_counts,
         name_substring=name_substring,
         limit=limit,
     )
