@@ -348,10 +348,10 @@ class SessionToolHandler:
                 # reported filters because it genuinely did not apply -- claiming
                 # a window we never enforced would misdescribe the result.
                 search_filters = {"lookup": "direct", identifier: identifier_value}
-                sample_sessions = sessions[:limit]
-                total_matching_sessions = len(sessions)
+                sample = sessions[:limit]
+                total_matching = len(sessions)
             else:
-                sample_sessions, total_matching_sessions = await self._fetch_auth_list_sessions(
+                sample, total_matching = await self._fetch_auth_list_sessions(
                     filters=filters, retention_cap=limit, minutes=minutes,
                 )
                 search_filters = {"lookup": "authlist_scan", "minutes": minutes}
@@ -359,23 +359,23 @@ class SessionToolHandler:
                     if value:
                         search_filters[key] = value
 
-            sample_size = len(sample_sessions)
+            sample_size = len(sample)
             sampling_note = build_sampling_note(
                 sample_size=sample_size,
-                total_found=total_matching_sessions,
+                total_found=total_matching,
                 resource="session",
             )
             logger.info(
                 "Session search complete",
                 lookup=search_filters["lookup"],
-                total_matching=total_matching_sessions,
+                total_matching=total_matching,
                 sample_size=sample_size,
             )
             return ActiveSessionSearchResult(
                 search_filters=search_filters,
-                total_matching_active_sessions=total_matching_sessions,
+                total_matching_active_sessions=total_matching,
                 sample_size=sample_size,
-                active_sessions_sample=sample_sessions,
+                active_sessions_sample=sample,
                 sampling_note=sampling_note,
             )
 
