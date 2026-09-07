@@ -471,7 +471,7 @@ class TestSessionToolHandlerSearchActiveSessions:
     async def test_no_filters_returns_all(self):
         handler = self._make_handler()
         result = await handler.search_active_sessions()
-        assert result.total_matching_sessions == 2
+        assert result.total_matching_active_sessions == 2
         assert result.sample_size == 2
         assert result.sampling_note is None
 
@@ -507,18 +507,21 @@ class TestSessionToolHandlerSearchActiveSessions:
 
     @pytest.mark.asyncio
     async def test_valid_filter_applied(self):
+        # Two filters, so this exercises the AuthList scan and its client-side
+        # filtering rather than the single-identifier direct lookup.
         handler = self._make_handler()
-        result = await handler.search_active_sessions(username="alice")
+        result = await handler.search_active_sessions(username="alice", server="ise-1")
         assert result.search_filters["username"] == "alice"
-        assert result.total_matching_sessions == 1
-        assert result.sample_sessions[0].user_name == "alice"
+        assert result.search_filters["lookup"] == "authlist_scan"
+        assert result.total_matching_active_sessions == 1
+        assert result.active_sessions_sample[0].user_name == "alice"
 
     @pytest.mark.asyncio
     async def test_filter_no_match_returns_empty(self):
         handler = self._make_handler()
-        result = await handler.search_active_sessions(username="nobody")
-        assert result.total_matching_sessions == 0
-        assert result.sample_sessions == []
+        result = await handler.search_active_sessions(username="nobody", server="ise-1")
+        assert result.total_matching_active_sessions == 0
+        assert result.active_sessions_sample == []
         assert result.sampling_note is None
 
     @pytest.mark.asyncio
@@ -528,9 +531,9 @@ class TestSessionToolHandlerSearchActiveSessions:
         misread the list as the complete set."""
         handler = self._make_handler()
         result = await handler.search_active_sessions(limit=1)
-        assert result.total_matching_sessions == 2
+        assert result.total_matching_active_sessions == 2
         assert result.sample_size == 1
-        assert len(result.sample_sessions) == 1
+        assert len(result.active_sessions_sample) == 1
         assert "sample" in result.sampling_note.lower()
         assert "1 out of 2" in result.sampling_note
 
@@ -1892,3 +1895,483 @@ class TestEnrichmentConcurrencyBound:
         expected = [f"user{i}" for i in range(1, n_sessions + 1) if i % 2 == 0]
         assert returned == expected[: len(returned)]
         assert returned == expected  # 7 even users <= limit 10, all kept
+
+
+# ===========================================================================
+# Direct single-identifier lookups
+# ===========================================================================
+
+_SESSION_PARAMS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sessionParameters>
+    <passed>1</passed>
+    <user_name>alice</user_name>
+    <calling_station_id>AA:BB:CC:DD:EE:01</calling_station_id>
+    <nas_ip_address>10.0.0.1</nas_ip_address>
+    <framed_ip_address>192.168.1.10</framed_ip_address>
+    <audit_session_id>C0A70110000000700019977</audit_session_id>
+    <acs_server>ise-1</acs_server>
+    <authentication_method>dot1x</authentication_method>
+    <response_time>150</response_time>
+</sessionParameters>"""
+
+_ACTIVE_LIST_ONE = """<?xml version="1.0"?>
+<activeList noOfActiveSession="1">
+    <activeSession>
+        <user_name>alice</user_name>
+        <calling_station_id>AA:BB:CC:DD:EE:01</calling_station_id>
+        <audit_session_id>C0A70110000000700019977</audit_session_id>
+    </activeSession>
+</activeList>"""
+
+_NO_SESSION_BODY = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<mnt-rest-result>
+  <http-code>500</http-code>
+  <internal-error-info>Session data is not available for nobody.</internal-error-info>
+</mnt-rest-result>"""
+
+
+def _direct_handler(get_side_effect):
+    """Build a handler whose AuthList stream FAILS loudly.
+
+    A direct-lookup test that accidentally routes to the scan must fail rather
+    than quietly pass on scan data, so get_stream raises.
+    """
+    import contextlib
+
+    from tools.session_tool_handler import SessionToolHandler
+
+    calls: list[str] = []
+
+    async def fake_get(endpoint):
+        calls.append(endpoint)
+        result = get_side_effect(endpoint)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    @contextlib.asynccontextmanager
+    async def exploding_stream(endpoint):
+        raise AssertionError(f"expected a direct lookup, but AuthList was streamed: {endpoint}")
+        yield  # pragma: no cover
+
+    mock_client = AsyncMock()
+    mock_client.get = fake_get
+    mock_client.get_stream = exploding_stream
+
+    class _PassGate:
+        @contextlib.asynccontextmanager
+        async def guard(self):
+            yield
+
+    return SessionToolHandler(mock_client, gate=_PassGate()), calls
+
+
+def _xml_response(text):
+    resp = Mock()
+    resp.text = text
+    return resp
+
+
+def _http_500(body):
+    import httpx
+
+    request = httpx.Request("GET", "https://ise.example/x")
+    response = httpx.Response(500, text=body, request=request)
+    return httpx.HTTPStatusError("500", request=request, response=response)
+
+
+class TestDirectLookupRouting:
+    """One identifier and no other filter routes to a dedicated MnT endpoint.
+
+    This replaces a whole-deployment AuthList download with a single GET, and —
+    because the point endpoints are not time-windowed — finds the session even
+    when it authenticated before the default lookback.
+    """
+
+    @pytest.mark.asyncio
+    async def test_username_uses_session_username_endpoint(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_active_sessions(username="alice")
+
+        assert calls == ["Session/UserName/alice"]
+        assert result.search_filters == {"lookup": "direct", "username": "alice"}
+        assert result.total_matching_active_sessions == 1
+        assert result.active_sessions_sample[0].user_name == "alice"
+        # acs_server is projected onto ActiveSession.server.
+        assert result.active_sessions_sample[0].server == "ise-1"
+
+    @pytest.mark.asyncio
+    async def test_mac_uses_session_macaddress_endpoint(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_active_sessions(calling_station_id="AA:BB:CC:DD:EE:01")
+
+        assert calls == ["Session/MACAddress/AA:BB:CC:DD:EE:01"]
+        assert result.search_filters["calling_station_id"] == "AA:BB:CC:DD:EE:01"
+
+    @pytest.mark.asyncio
+    async def test_nas_ip_uses_session_ipaddress_endpoint(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        await handler.search_active_sessions(nas_ip_address="10.0.0.1")
+
+        assert calls == ["Session/IPAddress/10.0.0.1"]
+
+    @pytest.mark.asyncio
+    async def test_framed_ip_uses_endpoint_ipaddress_endpoint(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        await handler.search_active_sessions(framed_ip_address="192.168.1.10")
+
+        assert calls == ["Session/EndPointIPAddress/192.168.1.10"]
+
+    @pytest.mark.asyncio
+    async def test_audit_session_id_uses_active_scoped_endpoint(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_ACTIVE_LIST_ONE))
+
+        result = await handler.search_active_sessions(
+            audit_session_id="C0A70110000000700019977"
+        )
+
+        assert calls == ["Session/Active/SessionID/C0A70110000000700019977/0"]
+        assert result.total_matching_active_sessions == 1
+
+    @pytest.mark.asyncio
+    async def test_minutes_is_not_reported_on_the_direct_path(self):
+        """The point endpoints are not time-bounded, so claiming a window we
+        never enforced would misdescribe the result."""
+        handler, _ = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_active_sessions(username="alice", minutes=5)
+
+        assert "minutes" not in result.search_filters
+
+    @pytest.mark.asyncio
+    async def test_limit_still_caps_the_direct_result(self):
+        handler, _ = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_active_sessions(username="alice", limit=1)
+
+        assert len(result.active_sessions_sample) == 1
+
+
+class TestScanFallbackRouting:
+    """Anything the point endpoints cannot express falls back to the scan.
+
+    Those endpoints take exactly one key, so "this MAC on that ISE node" or
+    "this MAC AND that username" has to be composed client-side.
+    """
+
+    def _scan_handler(self):
+        import contextlib
+
+        from tools.session_tool_handler import SessionToolHandler
+
+        streamed: list[str] = []
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            async def aiter_bytes(self):
+                yield _ACTIVE_LIST_ONE.encode("utf-8")
+
+        @contextlib.asynccontextmanager
+        async def fake_stream(endpoint):
+            streamed.append(endpoint)
+            yield FakeResponse()
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_stream
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+
+        return SessionToolHandler(mock_client, gate=_PassGate()), streamed
+
+    @pytest.mark.asyncio
+    async def test_two_identifiers_use_the_scan(self):
+        handler, streamed = self._scan_handler()
+
+        result = await handler.search_active_sessions(
+            username="alice", calling_station_id="AA:BB:CC:DD:EE:01"
+        )
+
+        assert streamed and streamed[0].startswith("Session/AuthList/")
+        assert result.search_filters["lookup"] == "authlist_scan"
+
+    @pytest.mark.asyncio
+    async def test_identifier_plus_server_uses_the_scan(self):
+        handler, streamed = self._scan_handler()
+
+        result = await handler.search_active_sessions(username="alice", server="ise-1")
+
+        assert streamed and streamed[0].startswith("Session/AuthList/")
+        assert result.search_filters["lookup"] == "authlist_scan"
+
+    @pytest.mark.asyncio
+    async def test_no_filters_uses_the_scan(self):
+        handler, streamed = self._scan_handler()
+
+        result = await handler.search_active_sessions()
+
+        assert streamed and streamed[0].startswith("Session/AuthList/")
+        assert result.search_filters["minutes"] == 1440
+
+
+class TestNoSessionIsAnEmptyResult:
+    """ISE reports "no session for this identifier" as HTTP 500.
+
+    Agents call these tools precisely to check whether a session exists, so that
+    must answer "none" rather than raising — a tool error there reads as "ISE is
+    broken", not "no, there isn't one".
+    """
+
+    @pytest.mark.asyncio
+    async def test_missing_session_returns_empty_not_an_error(self):
+        handler, _ = _direct_handler(lambda ep: _http_500(_NO_SESSION_BODY))
+
+        result = await handler.search_active_sessions(username="nobody")
+
+        assert result.total_matching_active_sessions == 0
+        assert result.active_sessions_sample == []
+        assert result.sampling_note is None
+
+    @pytest.mark.asyncio
+    async def test_missing_session_on_enriched_search_returns_empty(self):
+        handler, _ = _direct_handler(lambda ep: _http_500(_NO_SESSION_BODY))
+
+        result = await handler.search_enriched_active_sessions(username="nobody")
+
+        assert result.total_sessions_found == 0
+        assert result.sessions == []
+
+    @pytest.mark.asyncio
+    async def test_missing_session_by_audit_id_returns_empty(self):
+        handler, _ = _direct_handler(lambda ep: _http_500(_NO_SESSION_BODY))
+
+        result = await handler.search_active_sessions(audit_session_id="DEADBEEF")
+
+        assert result.total_matching_active_sessions == 0
+
+    @pytest.mark.asyncio
+    async def test_other_500_still_raises_with_ise_detail(self):
+        """A real backend fault must NOT be reported as an absence of sessions."""
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        body = (
+            "<mnt-rest-result><http-code>500</http-code>"
+            "<internal-error-info>Database connection refused</internal-error-info>"
+            "</mnt-rest-result>"
+        )
+        handler, _ = _direct_handler(lambda ep: _http_500(body))
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions(username="alice")
+
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "ISE_API_ERROR"
+        assert "Database connection refused" in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_unparseable_500_still_raises(self):
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler, _ = _direct_handler(lambda ep: _http_500("<html>502</html>"))
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions(username="alice")
+
+        assert json.loads(str(exc_info.value))["error_code"] == "ISE_API_ERROR"
+
+    @pytest.mark.asyncio
+    async def test_non_500_status_still_raises(self):
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler, _ = _direct_handler(lambda ep: _http_500(_NO_SESSION_BODY))
+        # Swap in a 401 carrying the same body: only 500 means "no session".
+        import httpx
+
+        request = httpx.Request("GET", "https://ise.example/x")
+        err = httpx.HTTPStatusError(
+            "401", request=request,
+            response=httpx.Response(401, text=_NO_SESSION_BODY, request=request),
+        )
+        handler, _ = _direct_handler(lambda ep: err)
+
+        with pytest.raises(McpToolError):
+            await handler.search_active_sessions(username="alice")
+
+
+class TestEnrichedDirectLookup:
+    """A known identifier gets full detail in ONE GET.
+
+    Previously this downloaded the whole AuthList and then issued a separate
+    per-session enrichment GET.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mac_fetches_detail_in_a_single_call(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_enriched_active_sessions(
+            calling_station_id="AA:BB:CC:DD:EE:01"
+        )
+
+        assert calls == ["Session/MACAddress/AA:BB:CC:DD:EE:01"]
+        assert result.total_sessions_found == 1
+        assert result.sessions[0].authentication_method == "dot1x"
+        assert result.search_filters["lookup"] == "direct"
+
+    @pytest.mark.asyncio
+    async def test_username_fetches_detail_in_a_single_call(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        result = await handler.search_enriched_active_sessions(username="alice")
+
+        assert calls == ["Session/UserName/alice"]
+        assert result.sessions[0].user_name == "alice"
+
+    @pytest.mark.asyncio
+    async def test_mac_takes_precedence_over_username(self):
+        """A MAC identifies one endpoint; a username can span several sessions."""
+        handler, calls = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        await handler.search_enriched_active_sessions(
+            username="alice", calling_station_id="AA:BB:CC:DD:EE:01"
+        )
+
+        assert calls == ["Session/MACAddress/AA:BB:CC:DD:EE:01"]
+
+    @pytest.mark.asyncio
+    async def test_latency_filter_still_applies_on_the_direct_path(self):
+        handler, _ = _direct_handler(lambda ep: _xml_response(_SESSION_PARAMS))
+
+        # response_time is 150ms in the fixture.
+        kept = await handler.search_enriched_active_sessions(
+            username="alice", min_latency_ms=100
+        )
+        dropped = await handler.search_enriched_active_sessions(
+            username="alice", min_latency_ms=500
+        )
+
+        assert kept.total_sessions_found == 1
+        assert dropped.total_sessions_found == 0
+
+
+class TestGetActiveSessionCounts:
+    @staticmethod
+    def _counts_handler(responses):
+        import contextlib
+
+        from tools.session_tool_handler import SessionToolHandler
+
+        async def fake_get(endpoint):
+            value = responses[endpoint]
+            if isinstance(value, Exception):
+                raise value
+            return _xml_response(value)
+
+        mock_client = AsyncMock()
+        mock_client.get = fake_get
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+
+        return SessionToolHandler(mock_client, gate=_PassGate())
+
+    @pytest.mark.asyncio
+    async def test_returns_all_three_counts(self):
+        handler = self._counts_handler({
+            "Session/ActiveCount": "<sessionCount><count>120</count></sessionCount>",
+            "Session/PostureCount": "<sessionCount><count>40</count></sessionCount>",
+            "Session/ProfilerCount": "<sessionCount><count>95</count></sessionCount>",
+        })
+
+        result = await handler.get_active_session_counts()
+
+        assert result.active_count == 120
+        assert result.posture_count == 40
+        assert result.profiler_count == 95
+
+    @pytest.mark.asyncio
+    async def test_zero_counts_are_valid(self):
+        handler = self._counts_handler({
+            "Session/ActiveCount": "<sessionCount><count>0</count></sessionCount>",
+            "Session/PostureCount": "<sessionCount><count>0</count></sessionCount>",
+            "Session/ProfilerCount": "<sessionCount><count>0</count></sessionCount>",
+        })
+
+        result = await handler.get_active_session_counts()
+
+        assert (result.active_count, result.posture_count, result.profiler_count) == (0, 0, 0)
+
+    @pytest.mark.asyncio
+    async def test_one_failing_endpoint_fails_the_call(self):
+        """A partial answer would be indistinguishable from a genuine zero."""
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler = self._counts_handler({
+            "Session/ActiveCount": "<sessionCount><count>120</count></sessionCount>",
+            "Session/PostureCount": _http_500("<mnt-rest-result><http-code>500</http-code></mnt-rest-result>"),
+            "Session/ProfilerCount": "<sessionCount><count>95</count></sessionCount>",
+        })
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.get_active_session_counts()
+
+        assert json.loads(str(exc_info.value))["error_code"] == "ISE_API_ERROR"
+
+    @pytest.mark.asyncio
+    async def test_malformed_count_body_is_an_internal_error(self):
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler = self._counts_handler({
+            "Session/ActiveCount": "<sessionCount/>",
+            "Session/PostureCount": "<sessionCount><count>0</count></sessionCount>",
+            "Session/ProfilerCount": "<sessionCount><count>0</count></sessionCount>",
+        })
+
+        with pytest.raises(McpToolError):
+            await handler.get_active_session_counts()
+
+
+class TestAuditSessionIdValidation:
+    @pytest.mark.asyncio
+    async def test_non_hex_value_is_rejected(self):
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler, _ = _direct_handler(lambda ep: _xml_response(_ACTIVE_LIST_ONE))
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions(audit_session_id="not-hex!")
+
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "INVALID_AUDIT_SESSION_ID"
+        # The message must name the acct_session_id confusion, which is the
+        # reason a caller usually lands here.
+        assert "acct_session_id" in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_value_is_uppercased_before_the_lookup(self):
+        handler, calls = _direct_handler(lambda ep: _xml_response(_ACTIVE_LIST_ONE))
+
+        await handler.search_active_sessions(audit_session_id="c0a7011000000070")
+
+        assert calls == ["Session/Active/SessionID/C0A7011000000070/0"]
+
+    @pytest.mark.asyncio
+    async def test_over_long_value_is_rejected(self):
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        handler, _ = _direct_handler(lambda ep: _xml_response(_ACTIVE_LIST_ONE))
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions(audit_session_id="A" * 65)
+
+        assert json.loads(str(exc_info.value))["error_code"] == "INVALID_AUDIT_SESSION_ID"

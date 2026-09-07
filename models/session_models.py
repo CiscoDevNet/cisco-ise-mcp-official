@@ -45,38 +45,45 @@ class ActiveSessionSearchResult(IseResultModel):
     """
     Represents the filtered search results from active sessions.
 
-    The session list is a bounded SAMPLE of matching sessions, capped by the
-    request limit to fit the model context window. Use total_matching_sessions
-    for the true count; sampling_note is present only when the list is truncated.
+    The session list is a bounded SAMPLE of matching active sessions, capped by
+    the request limit to fit the model context window. Use
+    total_matching_active_sessions for the true count; sampling_note is present
+    only when the list is truncated.
+
+    The field names carry "active" deliberately: with neutral names
+    (total_matching_sessions / sample_sessions) the answering model reported
+    these counts as totals for whatever the user had asked about -- failed
+    authentications, endpoints, sessions in some other time range. Naming the
+    scope in the field itself keeps that scope attached to the number.
     """
 
     search_filters: Dict[str, Any] = Field(
         default_factory=dict,
         description=_SEARCH_FILTERS_DESC,
     )
-    total_matching_sessions: int = Field(
+    total_matching_active_sessions: int = Field(
         ...,
         description=(
-            "Total sessions matching the filters in ISE. This is the full count; "
-            "the list below may contain fewer."
+            "Total currently active sessions matching the filters in ISE. This is "
+            "the full count; the list below may contain fewer."
         ),
         ge=0,
     )
     sample_size: int = Field(
         ...,
         description=(
-            "Number of sessions in sample_sessions below. May be smaller than "
-            "total_matching_sessions due to the result limit."
+            "Number of sessions in active_sessions_sample below. May be smaller "
+            "than total_matching_active_sessions due to the result limit."
         ),
         ge=0,
     )
-    sample_sessions: List[ActiveSession] = Field(
+    active_sessions_sample: List[ActiveSession] = Field(
         default_factory=list,
         description=(
-            "A representative SAMPLE of matching sessions, capped by 'limit' to fit "
-            "the model context window. These are real sessions but NOT the complete "
-            "set -- do not assume only this many sessions exist; cite "
-            "total_matching_sessions for the true count."
+            "A representative SAMPLE of matching active sessions, capped by 'limit' "
+            "to fit the model context window. These are real active sessions but "
+            "NOT the complete set -- do not assume only this many sessions exist; "
+            "cite total_matching_active_sessions for the true count."
         ),
     )
     sampling_note: Optional[str] = Field(
@@ -191,3 +198,15 @@ class LatencyEnrichedSessionSearchResult(IseResultModel):
     actual_sessions_returned: int = Field(..., description="Number of sessions included in the sessions list below", ge=0)
     sessions: List[SessionWithLatencyContext] = Field(default_factory=list, description="Sessions with resolved execution step details")
 
+
+
+class SessionCountResult(IseResultModel):
+    """Result of get_active_session_counts: deployment-wide session counts.
+
+    posture_count and profiler_count are SUBSETS of active_count, not separate
+    populations -- they must not be added together to derive a total.
+    """
+
+    active_count: int = Field(..., description="Total number of RADIUS sessions currently active across all ISE nodes", ge=0)
+    posture_count: int = Field(..., description="Subset of active_count where the endpoint has undergone posture assessment", ge=0)
+    profiler_count: int = Field(..., description="Subset of active_count currently tracked by the ISE profiler", ge=0)
