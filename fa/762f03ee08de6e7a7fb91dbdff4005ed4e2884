@@ -1,0 +1,44 @@
+tools/session_tool_handler.py
+  s_866f5441e82114::t_03be35ac2d30f7 351-352,354,362,365,371,376,378
+README.md
+  s_866f5441e82114::t_804ad37a8ab1dd 381-394,400-401
+  s_866f5441e82114::t_94b60c4102ca34 92-93
+MCP_TOOLS_CATALOG.md
+  s_866f5441e82114::t_344073094fff8f 1077-1078
+  s_866f5441e82114::t_b5a52a30ba821d 164-166,169-170
+  s_866f5441e82114::t_97a595eb7d4335 804-806,808-811,814,818-822
+  s_866f5441e82114::t_62e2e8f95d2dc9 584-622
+  s_866f5441e82114::t_1b47674e2d5ac4 1051-1052,1054-1055,1057-1059
+  s_866f5441e82114::t_a5845ba8fd9fa0 122,124-125
+  s_866f5441e82114::t_b23c585e5e073b 627-633
+  s_866f5441e82114::t_5ff83bb3b9eaf0 58-60
+  s_866f5441e82114::t_88e0dd99b9ff78 66-68,88,90,127,129
+  s_866f5441e82114::t_8b937aa21ab8ad 85
+  s_866f5441e82114::t_1454ef8f816240 846-847,849-851,855-861
+  s_866f5441e82114::t_060a0e18a3d760 651,657
+  s_866f5441e82114::t_c8858f83bc7170 65
+  s_866f5441e82114::t_cce28e75692dce 26,28-30
+  s_866f5441e82114::t_bab491fd46d5e0 20,22
+  s_866f5441e82114::t_f65b99ef784061 658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "fa762f03ee08de6e7a7fb91dbdff4005ed4e2884",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_866f5441e82114": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fab3049d-a8cc-4b28-b2af-2cbae0fbaeb8",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
