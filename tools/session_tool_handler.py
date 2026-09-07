@@ -15,6 +15,7 @@ from clients.mnt_client import MNTClient
 from clients.mnt_gate import mnt_gate
 from utils.xml_parser import (
     iter_filter_active_sessions,
+    mnt_error_is_missing_session,
     parse_active_session_xml,
     parse_mnt_error_body,
     parse_session_count_xml,
@@ -140,13 +141,6 @@ class SessionToolHandler:
         logger.info("Streamed authenticated sessions", total_matched=total_matched, retained=len(sessions))
         return sessions, total_matched
 
-    # ISE reports "no session for this identifier" as HTTP 500 with the reason
-    # in <internal-error-info>, not as 404 or an empty document. A direct lookup
-    # that finds nothing is a normal empty result, not a fault, so this phrase
-    # is how we tell the two apart. Matching on the message text is fragile but
-    # it is the only signal ISE gives; an unrecognised 500 still propagates.
-    _NO_SESSION_MARKER = "is not available"
-
     @asynccontextmanager
     async def _empty_on_no_session(self, sink: list) -> AsyncIterator[None]:
         """Swallow ISE's "session data is not available" 500, leaving *sink* empty.
@@ -160,12 +154,9 @@ class SessionToolHandler:
         try:
             yield
         except httpx.HTTPStatusError as e:
-            if e.response.status_code != 500:
+            if e.response.status_code != 500 or not mnt_error_is_missing_session(e.response.text):
                 raise
-            detail = parse_mnt_error_body(e.response.text) if e.response.text else None
-            if not detail or self._NO_SESSION_MARKER not in detail:
-                raise
-            logger.info("ISE reports no session for this identifier", detail=detail)
+            logger.info("ISE reports no session for this identifier")
             sink.clear()
 
     async def _fetch_session_as_active(self, endpoint: str, **log_context) -> List[ActiveSession]:

@@ -328,7 +328,7 @@ async def get_active_session_counts() -> SessionCountResult:
 async def ise_investigate_aaa_failure(
     calling_station_id: Annotated[Optional[str], "Endpoint MAC."] = None,
     username: Annotated[Optional[str], "Username."] = None,
-    minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes (minimum 1).")] = 60,
+    minutes: Annotated[int, Field(ge=0, le=1440, description="Lookback minutes for the MAC auth-status search (minimum 1). Defaults to 24h; a narrower window is the usual reason this tool finds nothing.")] = 1440,
     limit: Annotated[int, Field(ge=1, le=10, description="Result cap.")] = 1,
 ) -> AaaFailureInvestigationResult:
     """
@@ -339,9 +339,14 @@ async def ise_investigate_aaa_failure(
     USE THIS only when authentication FAILED and you need why: access denied,
     failure reason, why rejected, how to fix.
 
-    Session-scoped: an access-reject that never created a session may return no
-    results — an empty result means "no matching failure in the recent MnT
-    window", not proof the auth never happened.
+    Coverage, in the order tried: the MAC's auth-status records within `minutes`;
+    then the MAC's most recent session (not time-bounded, so it reaches failures
+    older than the window); then the username's most recent session.
+    `search_filters.source_api` reports which one answered.
+
+    An empty result is NOT proof the authentication never happened: an
+    access-reject that never created a session, and is older than `minutes`, is
+    outside what MnT exposes here.
     """
     result: AaaFailureInvestigationResult = await failure_tool_handler.investigate_aaa_failure(
         mac_address=calling_station_id,

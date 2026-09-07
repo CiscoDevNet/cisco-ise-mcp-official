@@ -199,6 +199,20 @@ def parse_mnt_error_body(xml_string: str) -> Optional[str]:
     return None
 
 
+# ISE reports "this identifier has no session" as HTTP 500 with this phrase in
+# <internal-error-info>, not as a 404 or an empty document. Matching on message
+# text is fragile, but it is the only signal ISE gives, and the distinction
+# matters: an absent session is a normal empty result, while every other 500 is
+# a fault that must not be reported as "nothing found".
+_NO_SESSION_MARKER = "is not available"
+
+
+def mnt_error_is_missing_session(body: Optional[str]) -> bool:
+    """True when an MnT error body means "no session for this identifier"."""
+    detail = parse_mnt_error_body(body) if body else None
+    return bool(detail) and _NO_SESSION_MARKER in detail
+
+
 # Fields of a <sessionParameters> body that map onto ActiveSession, as
 # {ActiveSession field: sessionParameters element}. Identity apart from
 # ``server``, which MnT calls ``acs_server`` in this response shape.
