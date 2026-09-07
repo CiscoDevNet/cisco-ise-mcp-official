@@ -1,0 +1,53 @@
+resources/ise_glossary.py
+  s_866f5441e82114::t_25148c6966e309 141-148,155
+  s_866f5441e82114::t_67e18ed813d52d 19-20
+tests/test_session_tools.py
+  s_866f5441e82114::t_901f7d397abe64 1898-2377
+  s_866f5441e82114::t_07a0a0a6865ed1 474
+  s_866f5441e82114::t_96632df112b828 510-511,513,515-517,522-524,534,536
+server.py
+  s_866f5441e82114::t_14a7537afd5fd1 566-569
+  s_866f5441e82114::t_69bfd300f6d4ac 220,232-233
+  s_866f5441e82114::t_c9b826d7eaddb8 514
+  s_866f5441e82114::t_3bf990b154654d 183,192-200
+  s_866f5441e82114::t_ab4fcb61639f0c 134,136,144-162,169
+  s_866f5441e82114::t_239f525153304b 32
+  s_866f5441e82114::t_c65f8443aef93d 306-324
+  s_866f5441e82114::t_17bd6167c61a34 234
+  s_866f5441e82114::t_a9d0b78e0cba14 303-305
+tests/test_server.py
+  s_866f5441e82114::t_b8ac30ffe5c6c2 552,554,580,591,593
+tools/session_tool_handler.py
+  s_866f5441e82114::t_9872e0650702cf 548-566
+  s_866f5441e82114::t_43f2256a959e5a 264,267-268
+  s_866f5441e82114::t_fae88eb53f1853 243-244
+  s_866f5441e82114::t_403ff5cd00815a 9,16-23,27,36,39,84-88,91-93,143-228,230-242,245-263,265-266,269,308,314-322,332-333,343-349,351-352,354-358,360-370,377-382,385,387
+  s_866f5441e82114::t_967d178d922e30 353,359
+  s_866f5441e82114::t_f858fea95e35a5 229
+  s_866f5441e82114::t_1d50cb1aa33f40 472-482,492-529
+models/session_models.py
+  s_866f5441e82114::t_c115bad26637c3 48-57,64,67-68,75-76,80,83-86,201-212
+utils/input_validators.py
+  s_866f5441e82114::t_4c8accaf434210 305-343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "49bb493d07c59bcf4c8c15fdbba71b2a035fdc1c",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_866f5441e82114": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fab3049d-a8cc-4b28-b2af-2cbae0fbaeb8",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
