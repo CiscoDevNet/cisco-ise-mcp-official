@@ -1,0 +1,10 @@
+contact_links:
+  - name: Cisco internal Webex space
+    url: https://eurl.io/#meokmr05p
+    about: Cisco employees only — quick questions, deployment help, and design discussion.
+  - name: Report a security vulnerability
+    url: https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/SECURITY.md
+    about: Follow the process in SECURITY.md.
+  - name: Cisco ISE API documentation
+    url: https://developer.cisco.com/docs/identity-services-engine/latest/cisco-ise-api-framework/
+    about: Official ISE API reference — check here first if the question is about ISE itself rather than this server.

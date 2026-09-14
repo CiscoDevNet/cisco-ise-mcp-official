@@ -1,0 +1,129 @@
+name: New tool request
+description: Propose a new MCP tool, or an argument/output change to an existing one
+labels: ["enhancement", "new-tool", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to propose a new tool or a change to an existing tool's inputs/outputs.
+
+        A tool earns its place by answering a question an ISE operator actually asks.
+        The most useful thing you can give us is that question, plus the ISE API that
+        can answer it. See
+        [Creating a new tool](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/docs/CREATING_TOOLS.md)
+        if you plan to implement it yourself.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I checked [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/MCP_TOOLS_CATALOG.md) and no existing tool covers this
+          required: true
+        - label: I searched [existing issues](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues?q=is%3Aissue) for the same request
+          required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What operator question should this answer?
+      description: >-
+        Phrase it the way you would ask an agent in natural language. This drives the
+        tool's name, description, and arguments more than anything else.
+      placeholder: |
+        "Which endpoints in the Finance group failed posture in the last 24 hours,
+        and what policy did they hit?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: gap
+    attributes:
+      label: Why can't you do this today?
+      description: >-
+        Which existing tool comes closest, and where does it fall short? If today's
+        workaround is several tool calls plus manual correlation, describe that.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-family
+    attributes:
+      label: Which ISE API family backs this?
+      description: >-
+        If you're not sure, pick "Not sure" — identifying the endpoint is part of triage.
+      options:
+        - ISE Open API (ERS / OpenAPI)
+        - MnT API (Monitoring & Troubleshooting)
+        - Both
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: endpoint
+    attributes:
+      label: Backing endpoint(s)
+      description: >-
+        The specific ISE endpoint(s) and a link to their
+        [API docs](https://developer.cisco.com/docs/identity-services-engine/latest/cisco-ise-api-framework/).
+        Note whether the data is exposed by an API at all — some ISE features
+        (TACACS+ device-admin data, for example) have no API surface, which makes the
+        request an upstream ISE limitation rather than something this server can add.
+      placeholder: |
+        GET /admin/API/mnt/Session/PostureCount — https://developer.cisco.com/docs/...
+      render: text
+
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Read or write?
+      description: >-
+        This server is read-only today. Write tools change the risk profile
+        substantially and need a much stronger justification.
+      options:
+        - Read-only
+        - Write / modifies ISE configuration
+    validations:
+      required: true
+
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Proposed inputs
+      description: >-
+        Arguments, types, defaults, and which are required. Note any that bound the
+        cost of the call (time window, limit, filters).
+      placeholder: |
+        endpoint_group: str | None = None
+        minutes: int = 60      # time window, bounded
+        limit: int = 100
+      render: text
+
+  - type: textarea
+    id: outputs
+    attributes:
+      label: Expected output
+      description: >-
+        Roughly what the tool should return. Keep in mind results are consumed by an
+        LLM in a limited context window, so call out anything that could be large and
+        how it should be summarized or truncated.
+      render: text
+
+  - type: input
+    id: ise-version
+    attributes:
+      label: Minimum ISE version
+      description: The earliest ISE release where the backing API exists, if you know it.
+      placeholder: "3.2"
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Are you willing to implement this?
+      options:
+        - "Yes, I'd like to open a PR"
+        - "Yes, with guidance on where to start"
+        - "No, requesting only"
+    validations:
+      required: true

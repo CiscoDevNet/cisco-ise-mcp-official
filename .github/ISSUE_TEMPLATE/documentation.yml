@@ -1,0 +1,59 @@
+name: Documentation issue
+description: Something in the docs is wrong, missing, unclear, or out of date
+labels: ["documentation", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for docs problems — including a tool whose description or catalog entry
+        doesn't match what it actually does. Small typo fixes are welcome as a direct PR
+        instead; no issue needed.
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Which document?
+      options:
+        - README.md
+        - MCP_TOOLS_CATALOG.md
+        - docs/CREATING_TOOLS.md
+        - CONTRIBUTING.md
+        - SECURITY.md
+        - .env.example
+        - Tool description / docstring (what the agent sees)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Section or link
+      description: The heading, anchor link, or line the problem is in.
+      placeholder: "README.md#load-on-mnt-nodes"
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Incorrect — the docs say something that isn't true
+        - Out of date — it was true, but the code changed
+        - Missing — something isn't documented at all
+        - Unclear — technically correct but I couldn't follow it
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's wrong
+      description: Quote the current text if you can, and say what you expected it to tell you.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested wording
+      description: Optional — a concrete replacement is the fastest path to a fix.
