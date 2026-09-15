@@ -81,6 +81,61 @@ class TestCertificateLogScanner:
         assert result["total_matches"] == 1
         assert "recent" in result["matches"][0]
 
+    def test_matches_real_ise_psc_timestamp_format(self, tmp_path):
+        """ise-psc.log uses "2026-08-17 18:10:45,180" — comma millis, no UTC offset.
+
+        The scanner previously parsed zero such lines, so every node reported
+        0 matches regardless of content.
+        """
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "2026-08-17 12:32:52,664 INFO  [main][[]] epm.auth.encryptor.crypt.TPMUtil -:::::- decrypting key...",
+            "2026-08-17 18:10:45,180 INFO  [admin-http-pool32][[]] cpm.restidstore.eventmanager.notifications."
+            "TrustCertificateNotificationHandler -::admin::deleteCertFromStore:- Pushing delete notification "
+            "for TrustCertificate apiuser#48cc5e31",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result is not None
+        assert result["total_matches"] == 1
+        assert "deleteCertFromStore" in result["matches"][0]
+
+    def test_cert_delete_matches_only_originating_notification(self, tmp_path):
+        """One admin deletion fans out to several listener lines that also carry
+        "deleteCertFromStore"; only the originating notification should match."""
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "2026-08-17 18:10:45,180 INFO  [admin-http-pool32][[]] cpm.restidstore.eventmanager.notifications."
+            "TrustCertificateNotificationHandler -::admin::deleteCertFromStore:- Pushing delete notification "
+            "for TrustCertificate apiuser#48cc5e31",
+            "2026-08-17 18:10:45,187 INFO  [admin-http-pool32][[]] cisco.cpm.posture.token.PostureTokenFactory "
+            "-::admin::deleteCertFromStore:- SwissListener - Listened to TrustCertificate delete",
+            "2026-08-17 18:10:45,190 INFO  [admin-http-pool32][[]] cisco.cpm.nsf.notifications.CertChangeHandler "
+            "-::admin::deleteCertFromStore:- handling cert change",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 1
+        assert "Pushing delete notification" in result["matches"][0]
+
+    def test_window_applies_to_comma_millis_format(self, tmp_path):
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "2026-08-17 12:00:00,000 ERROR Unknown CA old, out of window",
+            "2026-08-17 18:10:45,180 ERROR Unknown CA recent, in window",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 1
+        assert "recent" in result["matches"][0]
+
+    def test_mixed_timestamp_formats_do_not_error(self, tmp_path):
+        """Offset-bearing and offset-less lines must stay mutually comparable."""
+        from services.certificate_log_scanner import CertificateLogScanner
+        p = _write(tmp_path, [
+            "2026-08-17 18:00:00.000 +00:00 ERROR Unknown CA with offset",
+            "2026-08-17 18:10:45,180 ERROR Unknown CA without offset",
+        ])
+        result = CertificateLogScanner().scan(p)
+        assert result["total_matches"] == 2
+
     def test_lines_without_timestamp_are_ignored_for_window(self, tmp_path):
         from services.certificate_log_scanner import CertificateLogScanner
         p = _write(tmp_path, [

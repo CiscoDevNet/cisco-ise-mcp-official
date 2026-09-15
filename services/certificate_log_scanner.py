@@ -58,8 +58,7 @@ _RUNTIME_SIGNALS = [
 # Certificate management / config failures.
 _MGMT_SIGNALS = [
     "CertMgmtUtils",
-    "TrustedCertificatesAction",
-    "deleteCertFromStore",
+    "deleteCertFromStore:- Pushing delete notification",
     "Failed to parse certificate",
     "Certificate tag is missing",
     "Certificate hierarchy must terminate",
