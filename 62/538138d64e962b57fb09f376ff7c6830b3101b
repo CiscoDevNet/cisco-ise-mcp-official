@@ -1,0 +1,33 @@
+tests/test_ise_credential_middleware.py
+  s_9964bc680d6e66::t_904c80c4ec28d0 189
+tests/test_mnt_client.py
+  s_9964bc680d6e66::t_0a19981c984b51 272-275
+  s_9964bc680d6e66::t_904c80c4ec28d0 270
+tests/test_failure_tools.py
+  s_9964bc680d6e66::t_904c80c4ec28d0 1008,1143
+clients/mnt_client.py
+  s_9964bc680d6e66::t_a2f2f9892985ab 85-92
+  s_9964bc680d6e66::t_f8d8a4acf7110a 168
+models/policy_models.py
+  s_9964bc680d6e66::t_904c80c4ec28d0 303
+tests/test_policy_tools.py
+  s_9964bc680d6e66::t_904c80c4ec28d0 480
+utils/ise_credential_middleware.py
+  s_9964bc680d6e66::t_904c80c4ec28d0 23-24,142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "62538138d64e962b57fb09f376ff7c6830b3101b",
+  "prompts": {},
+  "sessions": {
+    "s_9964bc680d6e66": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "53486a82-362c-4139-99b8-b0da76bd1f48",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
