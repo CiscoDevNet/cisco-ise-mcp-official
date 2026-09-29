@@ -476,7 +476,10 @@ class TestSearchAuthorizationRules:
         assert len(result.global_exceptions) == 1
         assert result.global_exceptions[0].policy_set_name is None
         assert result.global_exceptions[0].name == "GlobalDeny"
-        assert "override" in result.global_exceptions_note.lower()
+        # The "these override everything" steering lives in the field
+        # description, not in a constant data field.
+        note = AuthorizationRuleSearchResult.model_fields["global_exceptions"].description
+        assert "override" in note.lower()
 
     @pytest.mark.asyncio
     async def test_profile_filter_applied_to_both_lists(self):
@@ -493,7 +496,7 @@ class TestSearchAuthorizationRules:
             _authz_rule(id_="g2", name="GlobalPermit", profile=["PermitAccess"]),
         ])
 
-        result = await handler.search_authorization_rules(profile_name_filter="Deny")
+        result = await handler.search_authorization_rules(profile_name_filter="DenyAccess")
 
         assert {r.name for r in result.rules} == {"DenyRule"}
         assert {r.name for r in result.global_exceptions} == {"GlobalDeny"}
@@ -529,7 +532,7 @@ class TestSearchAuthorizationRules:
         ])
         handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
 
-        result = await handler.search_authorization_rules(security_group_filter="emp")
+        result = await handler.search_authorization_rules(security_group_filter="employee")
 
         assert [r.name for r in result.rules] == ["EmpRule"]
 
@@ -618,7 +621,9 @@ class TestSearchAuthenticationRules:
             _authn_rule(id_="r2", name="InternalRule", identity_source_name="Internal Users"),
         ])
 
-        result = await handler.search_authentication_rules(identity_source_filter="ad")
+        result = await handler.search_authentication_rules(
+            identity_source_filter="AD:corp.example.com"
+        )
 
         assert isinstance(result, AuthenticationRuleSearchResult)
         assert [r.name for r in result.rules] == ["ADRule"]
@@ -1025,3 +1030,373 @@ class TestApiErrorPropagation:
         )
         with pytest.raises(McpToolError):
             await handler.search_authorization_rules()
+
+
+class TestFanOutCompleteness:
+    """The fan-out scans EVERY policy set, bounded by concurrency not by count.
+
+    An earlier _MAX_FAN_OUT_POLICY_SETS=25 cap bounded latency by answering from
+    a subset: on a 30-policy-set deployment, "which rules assign profile X"
+    reported zero hits even when a rule in set 27 matched. Concurrency-bounding
+    keeps coverage complete and makes any gap visible via
+    policy_sets_scanned vs policy_sets_total.
+    """
+
+    @staticmethod
+    def _many_policy_sets(n: int) -> list[dict]:
+        return [_ps(id_=f"ps-{i}", name=f"Set{i}", rank=i) for i in range(n)]
+
+    @pytest.mark.asyncio
+    async def test_scans_more_than_the_old_25_set_cap(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(
+            return_value=self._many_policy_sets(30)
+        )
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules()
+
+        assert handler.get_network_access_authorization_rule_list.await_count == 30
+        assert result.policy_sets_scanned == 30
+        assert result.policy_sets_total == 30
+
+    @pytest.mark.asyncio
+    async def test_finds_a_rule_beyond_the_old_cap(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(
+            return_value=self._many_policy_sets(30)
+        )
+
+        async def rules_for(policy_id):
+            if policy_id == "ps-27":
+                return [_authz_rule(id_="r1", name="LateRule", profile=["DenyAccess"])]
+            return []
+
+        handler.get_network_access_authorization_rule_list = AsyncMock(side_effect=rules_for)
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(profile_name_filter="DenyAccess")
+
+        assert [r.name for r in result.rules] == ["LateRule"]
+
+    @pytest.mark.asyncio
+    async def test_authn_scans_more_than_the_old_25_set_cap(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(
+            return_value=self._many_policy_sets(30)
+        )
+        handler.get_network_access_authentication_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authentication_rules()
+
+        assert handler.get_network_access_authentication_rule_list.await_count == 30
+        assert result.policy_sets_scanned == 30
+        assert result.policy_sets_total == 30
+
+    @pytest.mark.asyncio
+    async def test_concurrency_is_bounded(self):
+        """In-flight policy-set calls never exceed _MAX_CONCURRENT_ISE_CALLS.
+
+        ISE rate-limits the policy endpoints at ~10 rps; an unbounded gather over
+        every set trips 429/5xx on large deployments.
+        """
+        import asyncio
+
+        from tools.policy_tool_handler import _MAX_CONCURRENT_ISE_CALLS
+
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(
+            return_value=self._many_policy_sets(40)
+        )
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        in_flight = 0
+        peak = 0
+
+        async def slow_rules(policy_id):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0)
+            in_flight -= 1
+            return []
+
+        handler.get_network_access_authorization_rule_list = AsyncMock(side_effect=slow_rules)
+
+        await handler.search_authorization_rules()
+
+        assert peak <= _MAX_CONCURRENT_ISE_CALLS
+        assert peak > 1, "expected genuine concurrency, not serialization"
+
+    @pytest.mark.asyncio
+    async def test_policy_sets_without_an_id_are_excluded_from_total(self):
+        """An id-less set can never be fetched, so counting it in the total
+        would report incompleteness no follow-up call could ever resolve."""
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[
+            _ps(id_="ps-1", name="Real"),
+            {"name": "Broken", "rank": 1},
+        ])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules()
+
+        assert result.policy_sets_total == 1
+        assert result.policy_sets_scanned == 1
+
+    @pytest.mark.asyncio
+    async def test_named_policy_set_reports_full_coverage(self):
+        """A deliberately narrowed search must not look incomplete."""
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[
+            _ps(id_="ps-1", name="Default"),
+            _ps(id_="ps-2", name="Wireless"),
+            _ps(id_="ps-3", name="Wired"),
+        ])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(policy_set_name="Wireless")
+
+        assert result.policy_sets_scanned == 1
+        assert result.policy_sets_total == 1
+
+
+class TestPerPolicySetFailureTolerance:
+    """One failing policy-set fetch must not discard the whole search."""
+
+    @pytest.mark.asyncio
+    async def test_failed_set_is_excluded_and_others_still_returned(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[
+            _ps(id_="ps-1", name="Default", rank=0),
+            _ps(id_="ps-2", name="Wireless", rank=1),
+        ])
+
+        async def rules_for(policy_id):
+            if policy_id == "ps-1":
+                raise McpToolError('{"error_code": "ISE_API_ERROR"}')
+            return [_authz_rule(id_="r1", name="WirelessRule")]
+
+        handler.get_network_access_authorization_rule_list = AsyncMock(side_effect=rules_for)
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules()
+
+        assert [r.name for r in result.rules] == ["WirelessRule"]
+        # The gap is reported, not hidden: scanned < total signals the caller
+        # that rules in the failed set were not considered.
+        assert result.policy_sets_scanned == 1
+        assert result.policy_sets_total == 2
+
+    @pytest.mark.asyncio
+    async def test_surviving_results_stay_aligned_with_their_policy_set(self):
+        """Dropping a failure must not shift the policy-set/result zip."""
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[
+            _ps(id_="ps-1", name="First", rank=0),
+            _ps(id_="ps-2", name="Second", rank=1),
+            _ps(id_="ps-3", name="Third", rank=2),
+        ])
+
+        async def rules_for(policy_id):
+            if policy_id == "ps-2":
+                raise McpToolError("boom")
+            return [_authz_rule(id_="r", name=f"rule-{policy_id}")]
+
+        handler.get_network_access_authorization_rule_list = AsyncMock(side_effect=rules_for)
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules()
+
+        assert {(r.name, r.policy_set_name) for r in result.rules} == {
+            ("rule-ps-1", "First"),
+            ("rule-ps-3", "Third"),
+        }
+
+    @pytest.mark.asyncio
+    async def test_authn_failed_set_is_excluded_and_others_returned(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[
+            _ps(id_="ps-1", name="Default", rank=0),
+            _ps(id_="ps-2", name="Wireless", rank=1),
+        ])
+
+        async def rules_for(policy_id):
+            if policy_id == "ps-1":
+                raise McpToolError("boom")
+            return [_authn_rule(id_="r1", name="WirelessAuthn")]
+
+        handler.get_network_access_authentication_rule_list = AsyncMock(side_effect=rules_for)
+
+        result = await handler.search_authentication_rules()
+
+        assert [r.name for r in result.rules] == ["WirelessAuthn"]
+        assert result.policy_sets_scanned == 1
+        assert result.policy_sets_total == 2
+
+
+class TestExactNameMatching:
+    """profile / SGT / identity-source filters match exactly, not by substring.
+
+    ISE naming makes real objects prefixes of one another, so substring matching
+    silently widened "which rules deny access" into "anything deny-ish".
+    """
+
+    @pytest.mark.asyncio
+    async def test_profile_prefix_does_not_match(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Exact", profile=["DenyAccess"]),
+            _authz_rule(id_="r2", name="Longer", profile=["DenyAccess_Guest"]),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(profile_name_filter="DenyAccess")
+
+        assert [r.name for r in result.rules] == ["Exact"]
+
+    @pytest.mark.asyncio
+    async def test_profile_match_is_case_and_whitespace_insensitive(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Exact", profile=["DenyAccess"]),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(profile_name_filter="  denyaccess ")
+
+        assert [r.name for r in result.rules] == ["Exact"]
+
+    @pytest.mark.asyncio
+    async def test_rule_matches_when_any_assigned_profile_matches(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Multi", profile=["PermitAccess", "DenyAccess"]),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(profile_name_filter="DenyAccess")
+
+        assert [r.name for r in result.rules] == ["Multi"]
+
+    @pytest.mark.asyncio
+    async def test_security_group_prefix_does_not_match(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Exact", security_group="Developers"),
+            _authz_rule(id_="r2", name="Longer", security_group="Developers_Contractors"),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(security_group_filter="Developers")
+
+        assert [r.name for r in result.rules] == ["Exact"]
+
+    @pytest.mark.asyncio
+    async def test_identity_source_prefix_does_not_match(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authentication_rule_list = AsyncMock(return_value=[
+            _authn_rule(id_="r1", name="Short", identity_source_name="AD"),
+            _authn_rule(id_="r2", name="Long", identity_source_name="Corp_AD_JoinPoint"),
+        ])
+
+        result = await handler.search_authentication_rules(identity_source_filter="AD")
+
+        assert [r.name for r in result.rules] == ["Short"]
+
+    @pytest.mark.asyncio
+    async def test_rule_name_filter_remains_a_substring_match(self):
+        """name_substring is documented as a substring filter and stays one."""
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Guest_Wireless_Access"),
+            _authz_rule(id_="r2", name="Corp_Wired"),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(name_substring="wireless")
+
+        assert [r.name for r in result.rules] == ["Guest_Wireless_Access"]
+
+
+class TestMaxHitCounts:
+    """max_hit_counts=0 is how the agent answers "which rules are unused?"."""
+
+    @pytest.mark.asyncio
+    async def test_authz_max_hit_counts_zero_finds_unused_rules(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="Used", hit_counts=42),
+            _authz_rule(id_="r2", name="Unused", hit_counts=0),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(max_hit_counts=0)
+
+        assert [r.name for r in result.rules] == ["Unused"]
+        assert result.search_filters["max_hit_counts"] == 0
+
+    @pytest.mark.asyncio
+    async def test_authz_max_hit_counts_applies_to_global_exceptions_too(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="g1", name="UsedExc", hit_counts=5),
+            _authz_rule(id_="g2", name="UnusedExc", hit_counts=0),
+        ])
+
+        result = await handler.search_authorization_rules(max_hit_counts=0)
+
+        assert [r.name for r in result.global_exceptions] == ["UnusedExc"]
+
+    @pytest.mark.asyncio
+    async def test_authn_max_hit_counts_zero_finds_unused_rules(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authentication_rule_list = AsyncMock(return_value=[
+            _authn_rule(id_="r1", name="Used", hit_counts=7),
+            _authn_rule(id_="r2", name="Unused", hit_counts=0),
+        ])
+
+        result = await handler.search_authentication_rules(max_hit_counts=0)
+
+        assert [r.name for r in result.rules] == ["Unused"]
+        assert result.search_filters["max_hit_counts"] == 0
+
+    @pytest.mark.asyncio
+    async def test_min_and_max_bound_a_range(self):
+        handler = _make_handler()
+        handler.get_network_access_policy_set_list = AsyncMock(return_value=[_ps(id_="ps-1", name="D")])
+        handler.get_network_access_authorization_rule_list = AsyncMock(return_value=[
+            _authz_rule(id_="r1", name="TooFew", hit_counts=1),
+            _authz_rule(id_="r2", name="InRange", hit_counts=5),
+            _authz_rule(id_="r3", name="TooMany", hit_counts=50),
+        ])
+        handler.get_network_access_global_exception_rule_list = AsyncMock(return_value=[])
+
+        result = await handler.search_authorization_rules(min_hit_counts=2, max_hit_counts=10)
+
+        assert [r.name for r in result.rules] == ["InRange"]
+
+    @pytest.mark.asyncio
+    async def test_authz_inverted_range_is_rejected(self):
+        handler = _make_handler()
+        with pytest.raises(McpToolError):
+            await handler.search_authorization_rules(min_hit_counts=10, max_hit_counts=1)
+
+    @pytest.mark.asyncio
+    async def test_authn_inverted_range_is_rejected(self):
+        handler = _make_handler()
+        with pytest.raises(McpToolError):
+            await handler.search_authentication_rules(min_hit_counts=10, max_hit_counts=1)

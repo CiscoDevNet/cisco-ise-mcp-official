@@ -549,9 +549,9 @@ class TestSessionTools:
         with patch("server.session_tool_handler") as mock_handler:
             mock_return = ActiveSessionSearchResult(
                 search_filters={"minutes": 720},
-                total_matching_sessions=5,
+                total_matching_active_sessions=5,
                 sample_size=3,
-                sample_sessions=[],
+                active_sessions_sample=[],
                 sampling_note=(
                     "This is a SAMPLE of 3 out of 5 matching sessions, capped by the result limit. Treat it as a representative example, not an exhaustive list."
                 ),
@@ -577,7 +577,7 @@ class TestSessionTools:
             # Structured serialization must still drop None fields, matching
             # the previous model_dump_json(exclude_none=True) wire format.
             data = pydantic_core.to_jsonable_python(result)
-            assert data["total_matching_sessions"] == 5
+            assert data["total_matching_active_sessions"] == 5
             assert data["sample_size"] == 3
             assert "SAMPLE" in data["sampling_note"]
 
@@ -588,9 +588,9 @@ class TestSessionTools:
         with patch("server.session_tool_handler") as mock_handler:
             mock_handler.search_active_sessions = AsyncMock(
                 return_value=ActiveSessionSearchResult(
-                    total_matching_sessions=0,
+                    total_matching_active_sessions=0,
                     sample_size=0,
-                    sample_sessions=[],
+                    active_sessions_sample=[],
                 )
             )
 

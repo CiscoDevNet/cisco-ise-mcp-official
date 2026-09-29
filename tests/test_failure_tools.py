@@ -579,6 +579,8 @@ class TestFailureToolHandlerMacLookup:
             r = Mock()
             if "AuthStatus" in endpoint:
                 r.text = SAMPLE_AUTH_STATUS_PASSING_XML
+            elif "Session/MACAddress" in endpoint:
+                r.text = SAMPLE_SESSION_PASSING_XML
             elif "Session/UserName" in endpoint:
                 r.text = SAMPLE_SESSION_FAILING_XML
             else:
@@ -600,10 +602,16 @@ class TestFailureToolHandlerMacLookup:
         from tools.failure_tool_handler import FailureToolHandler
 
         mock_client = AsyncMock()
-        resp = Mock()
-        resp.text = SAMPLE_AUTH_STATUS_PASSING_XML
-        mock_client.get = AsyncMock(return_value=resp)
 
+        async def mock_get(endpoint):
+            r = Mock()
+            r.text = (
+                SAMPLE_AUTH_STATUS_PASSING_XML if "AuthStatus" in endpoint
+                else SAMPLE_SESSION_PASSING_XML
+            )
+            return r
+
+        mock_client.get = mock_get
         handler = FailureToolHandler(mock_client)
         result = await handler.investigate_aaa_failure(mac_address="88:14:43:88:44:92")
         assert result.total_failures_found == 0
@@ -989,3 +997,166 @@ class TestFailureModels:
         assert dumped["total_failures_found"] == 1
         assert dumped["has_more"] is False
         assert len(dumped["failures"]) == 1
+
+
+class TestFailureLookbackFallback:
+    """A failure older than `minutes` must still be found.
+
+    A narrow lookback finding nothing was the most common false negative here:
+    the failure the user is asking about is usually older than the window. After
+    AuthStatus comes up empty, the MAC's most recent session is consulted, which
+    is not time-bounded.
+    """
+
+    @staticmethod
+    def _handler(routes):
+        from tools.failure_tool_handler import FailureToolHandler
+
+        calls: list[str] = []
+
+        async def mock_get(endpoint):
+            calls.append(endpoint)
+            for fragment, value in routes.items():
+                if fragment in endpoint:
+                    if isinstance(value, Exception):
+                        raise value
+                    r = Mock()
+                    r.text = value
+                    return r
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+        client = AsyncMock()
+        client.get = mock_get
+        return FailureToolHandler(client), calls
+
+    @staticmethod
+    def _http_500(body):
+        import httpx
+
+        request = httpx.Request("GET", "https://ise.example/x")
+        return httpx.HTTPStatusError(
+            "500", request=request,
+            response=httpx.Response(500, text=body, request=request),
+        )
+
+    _NO_SESSION = (
+        "<mnt-rest-result><http-code>500</http-code>"
+        "<internal-error-info>Session data is not available for x.</internal-error-info>"
+        "</mnt-rest-result>"
+    )
+
+    @pytest.mark.asyncio
+    async def test_mac_last_session_answers_when_authstatus_window_is_empty(self):
+        handler, calls = self._handler({
+            "AuthStatus": SAMPLE_AUTH_STATUS_PASSING_XML,
+            "Session/MACAddress": SAMPLE_SESSION_FAILING_XML,
+        })
+
+        result = await handler.investigate_aaa_failure(
+            mac_address="88:14:43:88:44:92", minutes=5
+        )
+
+        assert result.total_failures_found == 1
+        assert result.search_filters["source_api"] == "Session"
+        assert any("AuthStatus" in c for c in calls)
+        assert any("Session/MACAddress" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_authstatus_hit_skips_the_fallback(self):
+        """The bounded source is authoritative when it has an answer: it also
+        sees rejects that never established a session."""
+        handler, calls = self._handler({
+            "AuthStatus": SAMPLE_AUTH_STATUS_FAILING_XML,
+            "Session/MACAddress": SAMPLE_SESSION_FAILING_XML,
+        })
+
+        result = await handler.investigate_aaa_failure(mac_address="78:14:43:88:44:92")
+
+        assert result.search_filters["source_api"] == "AuthStatus"
+        assert not any("Session/MACAddress" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_mac_fallback_is_tried_before_username(self):
+        handler, calls = self._handler({
+            "AuthStatus": SAMPLE_AUTH_STATUS_PASSING_XML,
+            "Session/MACAddress": SAMPLE_SESSION_FAILING_XML,
+            "Session/UserName": SAMPLE_SESSION_FAILING_XML,
+        })
+
+        await handler.investigate_aaa_failure(
+            mac_address="88:14:43:88:44:92", username="testUser"
+        )
+
+        assert not any("Session/UserName" in c for c in calls)
+
+    @pytest.mark.asyncio
+    async def test_authstatus_no_records_500_falls_through(self):
+        """ISE answering "no records" with a 500 must not fail the call."""
+        handler, _ = self._handler({
+            "AuthStatus": self._http_500(self._NO_SESSION),
+            "Session/MACAddress": SAMPLE_SESSION_FAILING_XML,
+        })
+
+        result = await handler.investigate_aaa_failure(mac_address="88:14:43:88:44:92")
+
+        assert result.total_failures_found == 1
+
+    @pytest.mark.asyncio
+    async def test_no_session_anywhere_returns_empty_not_an_error(self):
+        handler, _ = self._handler({
+            "AuthStatus": self._http_500(self._NO_SESSION),
+            "Session/MACAddress": self._http_500(self._NO_SESSION),
+            "Session/UserName": self._http_500(self._NO_SESSION),
+        })
+
+        result = await handler.investigate_aaa_failure(
+            mac_address="88:14:43:88:44:92", username="ghost"
+        )
+
+        assert result.total_failures_found == 0
+        assert result.failures == []
+
+    @pytest.mark.asyncio
+    async def test_real_backend_fault_surfaces_ise_detail(self):
+        """A genuine fault must not be reported as "no failures found"."""
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        body = (
+            "<mnt-rest-result><http-code>500</http-code>"
+            "<internal-error-info>Database connection refused</internal-error-info>"
+            "</mnt-rest-result>"
+        )
+        handler, _ = self._handler({"AuthStatus": self._http_500(body)})
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.investigate_aaa_failure(mac_address="88:14:43:88:44:92")
+
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "ISE_API_ERROR"
+        assert "Database connection refused" in data["message"]
+
+
+class TestFailureToolDefaultLookback:
+    @pytest.mark.asyncio
+    async def test_tool_defaults_to_24h_not_60_minutes(self):
+        """A 60-minute default was the documented cause of spurious
+        "no failure found" answers."""
+        from unittest.mock import patch
+
+        with patch("server.failure_tool_handler") as mock_handler:
+            from models.failure_models import AaaFailureInvestigationResult
+            from server import ise_investigate_aaa_failure
+
+            mock_handler.investigate_aaa_failure = AsyncMock(
+                return_value=AaaFailureInvestigationResult(
+                    search_filters={},
+                    total_failures_found=0,
+                    actual_failures_returned=0,
+                    has_more=False,
+                    failures=[],
+                )
+            )
+
+            await ise_investigate_aaa_failure(calling_station_id="88:14:43:88:44:92")
+
+            assert mock_handler.investigate_aaa_failure.call_args[1]["minutes"] == 1440

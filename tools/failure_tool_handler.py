@@ -13,8 +13,10 @@ from fastmcp.exceptions import ToolError as McpToolError
 from logger import logger
 from clients.mnt_client import MNTClient
 from utils.xml_parser import (
+    mnt_error_is_missing_session,
     parse_auth_status_xml,
     parse_failure_reasons_xml,
+    parse_mnt_error_body,
     parse_session_detail_xml,
 )
 from utils.input_validators import validate_minutes, validate_limit, validate_mac_address, validate_username
@@ -137,11 +139,16 @@ class FailureToolHandler:
                 retry=True,
             )
         except httpx.HTTPStatusError as e:
-            logger.exception("ISE MNT API HTTP error", status_code=e.response.status_code)
+            status_code = e.response.status_code
+            logger.exception("ISE MNT API HTTP error", status_code=status_code)
+            # ISE puts the only human-readable cause in <internal-error-info>;
+            # without it every backend fault is an opaque "HTTP 500".
+            detail = parse_mnt_error_body(e.response.text) if e.response.text else None
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_API_ERROR",
-                f"ISE MNT API returned HTTP {e.response.status_code}.",
-                retry=e.response.status_code >= 500,
+                f"ISE MNT API error: {detail}" if detail
+                else f"ISE MNT API returned HTTP {status_code}.",
+                retry=status_code >= 500,
             )
         except McpToolError:
             raise
@@ -166,28 +173,41 @@ class FailureToolHandler:
         endpoint = f"AuthStatus/MACAddress/{quote(mac_address, safe=':')}/{seconds}/{fetch_records}/All"
 
         logger.info("Fetching auth status by MAC", mac_address=mac_address, seconds=seconds, records=fetch_records)
-        response = await self.mnt_client.get(endpoint)
+        try:
+            response = await self.mnt_client.get(endpoint)
+        except httpx.HTTPStatusError as e:
+            # "No records for this MAC" is not a fault -- let the caller fall
+            # through to its unbounded last-session fallback.
+            if e.response.status_code == 500 and mnt_error_is_missing_session(e.response.text):
+                logger.info("No auth-status records for MAC in window", mac_address=mac_address)
+                return [], 0
+            raise
         all_entries = parse_auth_status_xml(response.text)
 
         failures = [e for e in all_entries if e.get("failed") is True]
         total_failed = len(failures)
         return failures[:limit], total_failed
 
-    async def _fetch_failure_by_username(self, username: str) -> tuple[List[Dict], int]:
-        """Fetch latest session by username and return it as a failure if auth failed.
+    async def _fetch_last_session_failure(self, endpoint: str, **log_context) -> tuple[List[Dict], int]:
+        """Fetch the LAST session for an identifier, if that session failed.
+
+        Not time-bounded, unlike AuthStatus, so this reaches failures older than
+        any lookback window. The trade-off is that it only sees the most recent
+        session: if the endpoint has since authenticated successfully, the
+        earlier failure is invisible here.
+
+        ISE answers "no session for this identifier" with HTTP 500 rather than
+        an empty document; that is a normal empty result. Every other 500 is a
+        real fault and propagates.
 
         Returns (failures_list, total_count) where total_count is 0 or 1.
-        The ISE Session/UserName API returns HTTP 500 with body containing
-        "is not available" when no session exists -- treated as empty result.
         """
-        endpoint = f"Session/UserName/{quote(username, safe='')}"
-
-        logger.info("Fetching session by username for failure check", username=username)
+        logger.info("Fetching last session for failure check", endpoint=endpoint, **log_context)
         try:
             response = await self.mnt_client.get(endpoint)
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 500 and "is not available" in e.response.text:
-                logger.info("No session data available for user", username=username)
+            if e.response.status_code == 500 and mnt_error_is_missing_session(e.response.text):
+                logger.info("ISE reports no session data for this identifier", **log_context)
                 return [], 0
             raise
         parsed = parse_session_detail_xml(response.text)
@@ -196,6 +216,18 @@ class FailureToolHandler:
             return [], 0
 
         return [parsed], 1
+
+    async def _fetch_failure_by_username(self, username: str) -> tuple[List[Dict], int]:
+        """Fetch the last session for a username, as a failure if it failed."""
+        return await self._fetch_last_session_failure(
+            f"Session/UserName/{quote(username, safe='')}", username=username
+        )
+
+    async def _fetch_last_session_failure_by_mac(self, mac_address: str) -> tuple[List[Dict], int]:
+        """Fetch the last session for a MAC, as a failure if it failed."""
+        return await self._fetch_last_session_failure(
+            f"Session/MACAddress/{quote(mac_address, safe=':')}", mac_address=mac_address
+        )
 
     def _build_fallback_details(self, raw_failures: List[Dict]) -> List[AaaFailureDetail]:
         """Build AaaFailureDetail objects without the FailureReasons catalog (degraded mode).
@@ -242,9 +274,19 @@ class FailureToolHandler:
     ) -> AaaFailureInvestigationResult:
         """Investigate AAA failures by MAC and/or username.
 
-        Lookup priority: MAC (AuthStatus API) first.  If MAC finds failures,
-        username lookup is skipped.  Falls back to username (Session API) only
-        when MAC found no failures or was not provided.
+        Lookup order, stopping at the first that finds a failure:
+
+        1. MAC via AuthStatus -- the only source that sees failures which never
+           established a session (a plain Access-Reject), but bounded by
+           ``minutes``.
+        2. MAC via Session/MACAddress -- not time-bounded, so it catches a
+           failure older than the window; sees only the endpoint's most recent
+           session.
+        3. Username via Session/UserName -- same trade-off, keyed by user.
+
+        Step 2 exists because a lookback window that finds nothing is the most
+        common false negative here: the failure the user is asking about often
+        happened before it.
 
         The ``FailureContextResolver`` used for enrichment is built
         lazily by :meth:`_get_failure_resolver` on the first call, so
@@ -296,6 +338,18 @@ class FailureToolHandler:
                     source = "AuthStatus"
                     logger.info("Found failures via MAC lookup",
                                 mac_address=mac_address, count=len(raw_failures))
+
+            if not raw_failures and mac_address:
+                # AuthStatus found nothing within `minutes`. Retry unbounded via
+                # the endpoint's last session, which is where a failure older
+                # than the window shows up.
+                raw_failures, total_failures = await self._fetch_last_session_failure_by_mac(
+                    mac_address,
+                )
+                if raw_failures:
+                    source = "Session"
+                    logger.info("Found failure via MAC last-session fallback",
+                                mac_address=mac_address)
 
             if not raw_failures and username:
                 raw_failures, total_failures = await self._fetch_failure_by_username(username)

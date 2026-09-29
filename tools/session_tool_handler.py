@@ -6,17 +6,26 @@ import asyncio
 import tempfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import AsyncIterator, List, Optional, Tuple
+from typing import AsyncIterator, Awaitable, List, Optional, Tuple
 from urllib.parse import quote
 import httpx
 
 from logger import logger
 from clients.mnt_client import MNTClient
 from clients.mnt_gate import mnt_gate
-from utils.xml_parser import parse_session_detail_xml, iter_filter_active_sessions
+from utils.xml_parser import (
+    iter_filter_active_sessions,
+    mnt_error_is_missing_session,
+    parse_active_session_xml,
+    parse_mnt_error_body,
+    parse_session_count_xml,
+    parse_session_detail_as_active_session,
+    parse_session_detail_xml,
+)
 from utils.sampling import build_sampling_note
 from utils.input_validators import (
     normalize_mac_address,
+    validate_audit_session_id,
     validate_minutes,
     validate_ip_address,
     validate_latency_range,
@@ -25,8 +34,10 @@ from utils.input_validators import (
 )
 from models.session_models import (
     ActiveSession,
+    ActiveSessionList,
     ActiveSessionSearchResult,
     EnrichedSessionSearchResult,
+    SessionCountResult,
     SessionDetail,
 )
 from fastmcp.exceptions import ToolError as McpToolError
@@ -71,11 +82,16 @@ class SessionToolHandler:
                 "The ISE MNT API is unreachable or timed out. Try again later.", retry=True,
             )
         except httpx.HTTPStatusError as e:
-            logger.exception("ISE MNT API HTTP error", status_code=e.response.status_code)
+            status_code = e.response.status_code
+            logger.exception("ISE MNT API HTTP error", status_code=status_code)
+            # ISE puts the only human-readable cause in <internal-error-info>;
+            # without it every backend fault is an indistinguishable "HTTP 500".
+            detail = parse_mnt_error_body(e.response.text) if e.response.text else None
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_API_ERROR",
-                f"ISE MNT API returned HTTP {e.response.status_code}.",
-                retry=e.response.status_code >= 500,
+                f"ISE MNT API error: {detail}" if detail
+                else f"ISE MNT API returned HTTP {status_code}.",
+                retry=status_code >= 500,
             )
         except McpToolError:
             raise
@@ -125,6 +141,123 @@ class SessionToolHandler:
         logger.info("Streamed authenticated sessions", total_matched=total_matched, retained=len(sessions))
         return sessions, total_matched
 
+    @asynccontextmanager
+    async def _empty_on_no_session(self, sink: list) -> AsyncIterator[None]:
+        """Swallow ISE's "session data is not available" 500, leaving *sink* empty.
+
+        A lookup for an identifier with no session must answer "none found" --
+        agents ask `active_sessions_search(username=...)` precisely to check
+        whether a session exists, and a tool error there reads as "ISE is
+        broken" rather than "no, there isn't one". Any other 500 propagates so
+        real faults are not silently reported as an absence.
+        """
+        try:
+            yield
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 500 or not mnt_error_is_missing_session(e.response.text):
+                raise
+            logger.info("ISE reports no session for this identifier")
+            sink.clear()
+
+    async def _fetch_session_as_active(self, endpoint: str, **log_context) -> List[ActiveSession]:
+        """GET a single-identifier MnT endpoint, projected to ActiveSession.
+
+        These endpoints return one <sessionParameters> record rather than an
+        <activeList>, so the result is a 0- or 1-element list. An absent session
+        yields [].
+        """
+        logger.info("Fetching session via direct MnT lookup", endpoint=endpoint, **log_context)
+        sessions: List[ActiveSession] = []
+        async with self._empty_on_no_session(sessions):
+            response = await self.mnt_client.get(endpoint)
+            sessions.append(ActiveSession(**parse_session_detail_as_active_session(response.text)))
+        return sessions
+
+    async def _fetch_sessions_by_audit_session_id(self, audit_session_id: str) -> List[ActiveSession]:
+        """Fetch active session(s) by audit session ID.
+
+        Unlike the other direct endpoints this one returns an <activeList>, and
+        it is genuinely active-scoped (note ``Session/Active/`` in the path).
+        """
+        endpoint = f"Session/Active/SessionID/{quote(audit_session_id, safe='')}/0"
+        logger.info("Fetching session by audit session ID", audit_session_id=audit_session_id)
+        sessions: List[ActiveSession] = []
+        async with self._empty_on_no_session(sessions):
+            response = await self.mnt_client.get(endpoint)
+            sessions.extend(ActiveSessionList(**parse_active_session_xml(response.text)).sessions)
+        return sessions
+
+    async def _fetch_session_detail(self, endpoint: str) -> List[SessionDetail]:
+        """GET a single-identifier MnT endpoint as a full SessionDetail.
+
+        One call replaces the AuthList download plus a follow-up enrichment GET.
+        Returns [] when ISE has no session for the identifier.
+        """
+        logger.info("Fetching session detail via direct MnT lookup", endpoint=endpoint)
+        details: List[SessionDetail] = []
+        async with self._empty_on_no_session(details):
+            response = await self.mnt_client.get(endpoint)
+            details.append(SessionDetail(**parse_session_detail_xml(response.text)))
+        return details
+
+    @staticmethod
+    def _mac_endpoint(mac: str) -> str:
+        return f"Session/MACAddress/{quote(mac, safe=':')}"
+
+    @staticmethod
+    def _username_endpoint(username: str) -> str:
+        return f"Session/UserName/{quote(username, safe='')}"
+
+    def _resolve_direct_lookup(
+        self,
+        *,
+        username: Optional[str],
+        calling_station_id: Optional[str],
+        nas_ip_address: Optional[str],
+        framed_ip_address: Optional[str],
+        audit_session_id: Optional[str],
+        server: Optional[str],
+    ) -> Optional[Tuple[str, str, Awaitable[List[ActiveSession]]]]:
+        """Pick a dedicated MnT endpoint when exactly one identifier pins the query.
+
+        ISE offers a point-lookup endpoint per identifier. Using it replaces the
+        whole-deployment AuthList download with one GET, and -- because it is not
+        time-windowed -- it also finds the session the caller asked about when it
+        authenticated outside the default lookback. That default silently losing
+        older sessions was the original complaint.
+
+        Requires EXACTLY one identifier and no non-identifier filter: these
+        endpoints take a single key and cannot express "this MAC on that ISE
+        node", so anything else must fall back to the AuthList scan where
+        client-side filtering can compose.
+
+        Returns ``(identifier_name, identifier_value, awaitable)``, or None to
+        use the scan.
+        """
+        candidates = [
+            # audit_session_id first: its endpoint is the only active-scoped one.
+            ("audit_session_id", audit_session_id,
+             lambda: self._fetch_sessions_by_audit_session_id(audit_session_id)),
+            ("calling_station_id", calling_station_id,
+             lambda: self._fetch_session_as_active(
+                 self._mac_endpoint(calling_station_id), mac=calling_station_id)),
+            ("username", username,
+             lambda: self._fetch_session_as_active(
+                 self._username_endpoint(username), username=username)),
+            ("nas_ip_address", nas_ip_address,
+             lambda: self._fetch_session_as_active(
+                 f"Session/IPAddress/{quote(nas_ip_address, safe='.')}", nas_ip=nas_ip_address)),
+            ("framed_ip_address", framed_ip_address,
+             lambda: self._fetch_session_as_active(
+                 f"Session/EndPointIPAddress/{quote(framed_ip_address, safe='.')}",
+                 framed_ip=framed_ip_address)),
+        ]
+        supplied = [(name, value, fetch) for name, value, fetch in candidates if value]
+        if len(supplied) != 1 or server:
+            return None
+        name, value, fetch = supplied[0]
+        return name, value, fetch()
+
     @staticmethod
     def _build_session_predicate(
         username: Optional[str] = None,
@@ -163,19 +296,21 @@ class SessionToolHandler:
         calling_station_id: Optional[str] = None,
         nas_ip_address: Optional[str] = None,
         framed_ip_address: Optional[str] = None,
+        audit_session_id: Optional[str] = None,
         server: Optional[str] = None,
         minutes: int = 1440,
         limit: int = 10
     ) -> ActiveSessionSearchResult:
         """
-        Search authenticated sessions from the past X minutes with optional filters.
-        
-        Uses the ISE MNT AuthList API to query sessions authenticated within a time window.
-        Since the MNT API doesn't support server-side filtering, this method:
-        1. Validates and normalizes all inputs
-        2. Fetches authenticated sessions from the past X minutes using AuthList API
-        3. Applies client-side filtering based on provided parameters
-        4. Returns filtered results with metadata
+        Search sessions via the most precise ISE MNT endpoint available.
+
+        Routing:
+        - Exactly one identifier and no other filter -> that identifier's
+          dedicated MnT endpoint, one GET, no time window.
+        - Anything else -> the AuthList time-window scan, filtered client-side
+          during the streaming parse (the MnT API has no server-side filtering).
+
+        Both paths return the same shape: filters, total count, sample list.
         """
         minutes = validate_minutes(minutes, max_minutes=self.MAX_MINUTES)
         limit = validate_limit(limit, max_limit=20)
@@ -185,6 +320,8 @@ class SessionToolHandler:
             nas_ip_address = validate_ip_address(nas_ip_address)
         if framed_ip_address:
             framed_ip_address = validate_ip_address(framed_ip_address)
+        if audit_session_id:
+            audit_session_id = validate_audit_session_id(audit_session_id)
 
         async with self._handle_mnt_errors("searching active sessions"):
             filters = {
@@ -194,25 +331,51 @@ class SessionToolHandler:
                 "framed_ip_address": framed_ip_address,
                 "server": server,
             }
-            sample_sessions, total_matching_sessions = await self._fetch_auth_list_sessions(
-                filters=filters, retention_cap=limit, minutes=minutes,
+            direct = self._resolve_direct_lookup(
+                username=username,
+                calling_station_id=calling_station_id,
+                nas_ip_address=nas_ip_address,
+                framed_ip_address=framed_ip_address,
+                audit_session_id=audit_session_id,
+                server=server,
             )
-            search_filters = {"minutes": minutes}
-            for key, value in filters.items():
-                if value:
-                    search_filters[key] = value
-            sample_size = len(sample_sessions)
+
+            if direct is not None:
+                identifier, identifier_value, fetch = direct
+                sessions = await fetch
+                # The endpoint already answers exactly the question asked, so no
+                # client-side filtering follows. `minutes` is omitted from the
+                # reported filters because it genuinely did not apply -- claiming
+                # a window we never enforced would misdescribe the result.
+                search_filters = {"lookup": "direct", identifier: identifier_value}
+                sample = sessions[:limit]
+                total_matching = len(sessions)
+            else:
+                sample, total_matching = await self._fetch_auth_list_sessions(
+                    filters=filters, retention_cap=limit, minutes=minutes,
+                )
+                search_filters = {"lookup": "authlist_scan", "minutes": minutes}
+                for key, value in filters.items():
+                    if value:
+                        search_filters[key] = value
+
+            sample_size = len(sample)
             sampling_note = build_sampling_note(
                 sample_size=sample_size,
-                total_found=total_matching_sessions,
+                total_found=total_matching,
                 resource="session",
             )
-            logger.info("Session search complete", total_matching=total_matching_sessions, sample_size=sample_size)
+            logger.info(
+                "Session search complete",
+                lookup=search_filters["lookup"],
+                total_matching=total_matching,
+                sample_size=sample_size,
+            )
             return ActiveSessionSearchResult(
                 search_filters=search_filters,
-                total_matching_sessions=total_matching_sessions,
+                total_matching_active_sessions=total_matching,
                 sample_size=sample_size,
-                sample_sessions=sample_sessions,
+                active_sessions_sample=sample,
                 sampling_note=sampling_note,
             )
 
@@ -297,17 +460,17 @@ class SessionToolHandler:
         max_latency_ms: Optional[int] = None,
     ) -> EnrichedSessionSearchResult:
         """
-        Search active sessions (AuthList API) and enrich each with detailed data from Get Session Details API.
-        limit default 1, max 10. Enrichment uses calling_station_id first.
+        Return sessions with full detail from the Get Session Details API.
 
-        Pipeline:
-            1. Validate and normalize all inputs
-            2. Fetch sessions from ISE
-            3. Filter by username / calling_station_id (cheap, pre-enrichment)
-            4. Enrich up to ENRICHMENT_CAP sessions when latency filters are
-               active, otherwise up to ``limit``
-            5. Apply latency range filter on enriched SessionDetail objects
-            6. Truncate to ``limit``
+        Routing:
+        - MAC or username supplied -> that identifier's dedicated MnT endpoint,
+          a SINGLE GET that returns the full detail directly. No AuthList
+          download, no separate enrichment pass, and no time window (so a
+          session that authenticated before the lookback is still found).
+        - Neither supplied (e.g. a latency-range-only query) -> AuthList scan,
+          then a bounded per-session enrichment fan-out.
+
+        limit default 1, max 10.
         """
         minutes = validate_minutes(minutes, max_minutes=self.MAX_MINUTES)
         limit = validate_limit(limit, max_limit=10)
@@ -317,33 +480,44 @@ class SessionToolHandler:
 
         async with self._handle_mnt_errors("searching enriched sessions"):
             has_latency_filter = min_latency_ms is not None or max_latency_ms is not None
-            cap = self.ENRICHMENT_CAP if has_latency_filter else limit
-            filters = {"username": username, "calling_station_id": calling_station_id}
-            filtered_sessions, total_sessions_found = await self._fetch_auth_list_sessions(
-                filters=filters, retention_cap=cap, minutes=minutes,
-            )
-            filters_applied = {"minutes": minutes}
-            if username:
-                filters_applied["username"] = username
-            if calling_station_id:
-                filters_applied["calling_station_id"] = calling_station_id
 
-            sessions_to_enrich = filtered_sessions[:cap]
-            # Bound the enrichment fan-out to at most ENRICHMENT_MAX_CONCURRENCY
-            # concurrent per-session GETs. A per-call Semaphore keeps this a
-            # width limiter for THIS call only (not cross-call admission). gather
-            # preserves order, and _enrich_session still returns Optional and
-            # handles its own per-session errors, so None-dropping is unchanged.
-            enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_MAX_CONCURRENCY)
+            if calling_station_id or username:
+                # MAC takes precedence: it identifies the endpoint, whereas one
+                # username can span several concurrent sessions.
+                if calling_station_id:
+                    endpoint = self._mac_endpoint(calling_station_id)
+                    filters_applied = {
+                        "lookup": "direct", "calling_station_id": calling_station_id,
+                    }
+                else:
+                    endpoint = self._username_endpoint(username)
+                    filters_applied = {"lookup": "direct", "username": username}
+                enriched_sessions = await self._fetch_session_detail(endpoint)
+                total_sessions_found = len(enriched_sessions)
+            else:
+                cap = self.ENRICHMENT_CAP if has_latency_filter else limit
+                filtered_sessions, total_sessions_found = await self._fetch_auth_list_sessions(
+                    filters={}, retention_cap=cap, minutes=minutes,
+                )
+                filters_applied = {"lookup": "authlist_scan", "minutes": minutes}
 
-            async def _bounded_enrich(session: ActiveSession) -> Optional[SessionDetail]:
-                async with enrichment_semaphore:
-                    return await self._enrich_session(session)
+                sessions_to_enrich = filtered_sessions[:cap]
+                # Bound the enrichment fan-out to at most
+                # ENRICHMENT_MAX_CONCURRENCY concurrent per-session GETs. A
+                # per-call Semaphore keeps this a width limiter for THIS call
+                # only (not cross-call admission). gather preserves order, and
+                # _enrich_session still returns Optional and handles its own
+                # per-session errors, so None-dropping is unchanged.
+                enrichment_semaphore = asyncio.Semaphore(self.ENRICHMENT_MAX_CONCURRENCY)
 
-            enrichment_results = await asyncio.gather(
-                *[_bounded_enrich(s) for s in sessions_to_enrich]
-            )
-            enriched_sessions = [s for s in enrichment_results if s is not None]
+                async def _bounded_enrich(session: ActiveSession) -> Optional[SessionDetail]:
+                    async with enrichment_semaphore:
+                        return await self._enrich_session(session)
+
+                enrichment_results = await asyncio.gather(
+                    *[_bounded_enrich(s) for s in sessions_to_enrich]
+                )
+                enriched_sessions = [s for s in enrichment_results if s is not None]
 
             if has_latency_filter:
                 enriched_sessions = self._filter_sessions_by_latency(
@@ -361,4 +535,23 @@ class SessionToolHandler:
                 total_sessions_found=total_sessions_found,
                 actual_sessions_returned=len(enriched_sessions),
                 sessions=enriched_sessions,
+            )
+
+    async def get_active_session_counts(self) -> SessionCountResult:
+        """Fetch the active, posture, and profiler session counts.
+
+        Three independent MnT endpoints, fetched concurrently. gather's default
+        return_exceptions=False is what we want here: a partial answer would be
+        indistinguishable from a genuine zero, so any failure fails the call.
+        """
+        async with self._handle_mnt_errors("fetching session counts"):
+            active_resp, posture_resp, profiler_resp = await asyncio.gather(
+                self.mnt_client.get("Session/ActiveCount"),
+                self.mnt_client.get("Session/PostureCount"),
+                self.mnt_client.get("Session/ProfilerCount"),
+            )
+            return SessionCountResult(
+                active_count=parse_session_count_xml(active_resp.text),
+                posture_count=parse_session_count_xml(posture_resp.text),
+                profiler_count=parse_session_count_xml(profiler_resp.text),
             )

@@ -89,6 +89,8 @@ The server will be available at `http://localhost:5000`
 | `ISE_LOG_DOWNLOAD_MAX_CONCURRENCY` | Max node-log (`.log.zip`) downloads in flight at once, 1–4 | `1` | No |
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
+| `DEBUG_MCP` | Set to `true` for DEBUG-level logs; otherwise INFO | `false` | No |
+| `LOG_COLORS` | Force ANSI color codes in logs on/off. Defaults to autodetecting whether stderr is a terminal, so captured logs (`docker logs`, a file, a journal) stay free of escape sequences | autodetect | No |
 
 The server authenticates to ISE with one of three credential types: the
 per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
@@ -274,18 +276,27 @@ session-search tools (`active_sessions_search`,
 `sessions_search_with_advanced_details`, `sessions_search_with_policy_details`,
 `sessions_search_with_latency_details`), the AAA-failure investigator, and
 `ise_deployment_health` with `diagnostics=true`. These are real work on the MnT
-node, and the session tools download all sessions in the requested window, so
-larger `minutes`/`limit` values cost more. To keep this from overloading MnT,
-heavy MnT reads are serialized by default; concurrent or too-rapid calls receive
-a retryable `ISE_BUSY` error that clients should back off and retry.
+node.
+
+The expensive path is the AuthList scan, which downloads every session in the
+requested window, so larger `minutes`/`limit` values cost more. To keep that from
+overloading MnT, these downloads are serialized by default; concurrent or
+too-rapid calls receive a retryable `ISE_BUSY` error that clients should back off
+and retry.
+
+**The cheapest way to avoid that cost is to query one identifier at a time.**
+Given a single identifier — username, MAC, NAS IP, endpoint IP, or
+`audit_session_id`, with no other filter — the session tools call ISE's dedicated
+per-identifier endpoint instead: one small GET, no download, and not gated. Each
+result reports which path ran in `search_filters.lookup`. Combining filters is
+more precise but forces the scan.
 
 The `ISE_MNT_GATE_*` env vars in the [Configuration](#configuration) table tune
 this backpressure. **The defaults are intentionally restrictive** (one heavy read
 at a time). Raise the limits only with care and with headroom on your MnT node —
 each concurrent call is genuine load on ISE, so be mindful of the resource
-consumption you're adding. Passing narrow filters (username / MAC / NAS IP) and
-using `ise_investigate_aaa_failure` (bounded, no full download) for failure
-lookups also reduces load.
+consumption you're adding. `ise_investigate_aaa_failure` (bounded, no full
+download) and `get_active_session_counts` (counters only) are also cheap.
 
 ## Development
 

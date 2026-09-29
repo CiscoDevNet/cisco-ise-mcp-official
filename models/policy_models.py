@@ -265,7 +265,24 @@ class AuthorizationRuleSearchResult(IseResultModel):
     has_more: bool = Field(..., description="True when `total_count > count` for the per-policy-set rules.")
     policy_sets_scanned: int = Field(
         ...,
-        description="Number of policy sets that were scanned during the fan-out. Compare with the total policy-set count if `has_more` is True — narrowing via `policy_set_name` may speed up the next call.",
+        description=(
+            "Number of policy sets scanned during the fan-out. The scan is "
+            "COMPLETE only when this equals `policy_sets_total`; when it is less, "
+            "some policy sets could not be read and matching rules inside them "
+            "were not considered — narrow via `policy_set_name` to cover the "
+            "rest. Independent of `has_more`, which reflects only rule-list "
+            "truncation (`total_count` vs `count`), not fan-out coverage."
+        ),
+    )
+    policy_sets_total: int = Field(
+        ...,
+        description=(
+            "Denominator for fan-out completeness; compare with "
+            "`policy_sets_scanned`. Without `policy_set_name` this is the full "
+            "count of configured policy sets. When narrowed by `policy_set_name` "
+            "it is 1 (the targeted set), so it is NOT necessarily the global "
+            "policy-set count."
+        ),
     )
     rules: List[AuthorizationRuleHit] = Field(
         ...,
@@ -273,12 +290,18 @@ class AuthorizationRuleSearchResult(IseResultModel):
     )
     global_exceptions: List[AuthorizationRuleHit] = Field(
         ...,
-        description="Global exception rules matching the same filters. Override per-policy-set authz rules across ALL policy sets.",
+        description=(
+            "Global exception rules matching the same filters. These override "
+            "per-policy-set authz rules across ALL policy sets, so check them "
+            "first when an unexpected profile is being applied. An empty list "
+            "means no global exception rule matched the filters."
+        ),
     )
-    global_exceptions_note: str = Field(
-        "Global exception rules override per-policy-set authorization rules across ALL policy sets. Check these first when an unexpected profile is being applied.",
-        description="Steering note for the agent.",
-    )
+    # No companion "note" field here. A constant string shipped alongside the
+    # list read as a finding rather than as guidance: with global_exceptions=[]
+    # the agent still reported that global exceptions were overriding the
+    # rules. The steering now lives in the field description above,
+    # where the agent reads it as schema documentation instead of as data.
 
 
 # ===========================================================================
@@ -309,7 +332,24 @@ class AuthenticationRuleSearchResult(IseResultModel):
     has_more: bool = Field(..., description="True when `total_count > count`.")
     policy_sets_scanned: int = Field(
         ...,
-        description="Number of policy sets scanned during the fan-out.",
+        description=(
+            "Number of policy sets scanned during the fan-out. The scan is "
+            "COMPLETE only when this equals `policy_sets_total`; when it is less, "
+            "some policy sets could not be read and matching rules inside them "
+            "were not considered — narrow via `policy_set_name` to cover the "
+            "rest. Independent of `has_more`, which reflects only rule-list "
+            "truncation."
+        ),
+    )
+    policy_sets_total: int = Field(
+        ...,
+        description=(
+            "Denominator for fan-out completeness; compare with "
+            "`policy_sets_scanned`. Without `policy_set_name` this is the full "
+            "count of configured policy sets. When narrowed by `policy_set_name` "
+            "it is 1 (the targeted set), so it is NOT necessarily the global "
+            "policy-set count."
+        ),
     )
     rules: List[AuthenticationRuleHit] = Field(
         ...,

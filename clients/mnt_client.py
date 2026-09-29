@@ -80,6 +80,24 @@ __all__ = [
 ]
 
 
+# Attached to every MnT request to suppress the shared client's cookie jar.
+#
+# The singleton ``httpx.AsyncClient`` retains ISE ``Set-Cookie`` values across
+# calls. Because that client is shared by every concurrent caller, a retained
+# cookie is per-request state outliving the request that produced it. Each MnT
+# call must therefore be authenticated solely by the explicit credential it
+# carries, with nothing inherited from an earlier call.
+#
+# DO NOT REMOVE: this header is what keeps per-call credentials isolated on a
+# shared client. Covered by ``TestMNTClientCookieSuppression``.
+#
+# WHY AN EMPTY STRING RATHER THAN A CLIENT SETTING: httpx has no switch to
+# disable the jar. ``http.cookiejar.CookieJar.add_cookie_header`` injects the
+# jar's cookies only ``if not request.has_header("Cookie")``, so presenting an
+# explicit (empty) Cookie header is the supported way to opt one request out.
+_COOKIE_SUPPRESSION_HEADER = {"Cookie": ""}
+
+
 class _NoOpAuth(httpx.Auth):
     """An ``httpx.Auth`` flow that yields the request unmodified.
 
@@ -147,7 +165,7 @@ class MNTClient:
 
         # --- one-time MnT-FQDN discovery state ----------------------
         # ``_mnt_fqdn`` is the FQDN we extracted from the Deployment API
-        # response (e.g. ``piyukum3-79.sn.test``), or ``None`` if we
+        # response (e.g. ``mnt1.example.com``), or ``None`` if we
         # never discovered one. ``_discovery_succeeded`` flips to True
         # the first time we either (a) got a valid FQDN, OR (b) got an
         # empty ``response`` array from the Deployment API (standalone
@@ -297,12 +315,18 @@ class MNTClient:
         header or service-account Basic creds. (The cert is still
         presented at the TLS layer via the shared SSL context, which is
         harmless: the MnT server does not request it.)
+
+        An empty ``Cookie`` header is attached on EVERY path (see
+        ``_COOKIE_SUPPRESSION_HEADER``).
         """
         per_user_credential = get_per_user_credential()
         if per_user_credential:
             return (
                 {
-                    "headers": {"Authorization": per_user_credential},
+                    "headers": {
+                        "Authorization": per_user_credential,
+                        **_COOKIE_SUPPRESSION_HEADER,
+                    },
                     "auth": _NoOpAuth(),
                 },
                 "per_user_credential",
@@ -322,7 +346,7 @@ class MNTClient:
                 f"'{settings.credential_header_name}'. Either configure "
                 "SA creds in .env or ensure NVA forwards the header."
             )
-        return ({}, "service_account")
+        return ({"headers": dict(_COOKIE_SUPPRESSION_HEADER)}, "service_account")
 
     async def _ensure_mnt_target(self) -> None:
         """Run one-time MnT-FQDN discovery if it hasn't succeeded yet.
