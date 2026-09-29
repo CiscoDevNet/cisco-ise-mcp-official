@@ -90,7 +90,6 @@ The server will be available at `http://localhost:5000`
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
 | `DEBUG_MCP` | Set to `true` for DEBUG-level logs; otherwise INFO | `false` | No |
-| `LOG_COLORS` | Force ANSI color codes in logs on/off. Defaults to autodetecting whether stderr is a terminal, so captured logs (`docker logs`, a file, a journal) stay free of escape sequences | autodetect | No |
 
 The server authenticates to ISE with one of three credential types: the
 per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
