@@ -6,7 +6,7 @@ test command.
 
 A tool is worth adding when it answers a question an ISE operator actually asks
 and no existing tool answers it. Check
-[MCP_TOOLS_CATALOG.md](../MCP_TOOLS_CATALOG.md) before you start, and consider
+[MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) before you start, and consider
 opening a
 [new tool request](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues/new/choose)
 first so the shape can be agreed before you write code.
@@ -368,7 +368,7 @@ imports a new generated API module, add it to the stub map.
 
 ## Step 8 — Document the tool
 
-[MCP_TOOLS_CATALOG.md](../MCP_TOOLS_CATALOG.md) is the tool reference, and a new
+[MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) is the tool reference, and a new
 tool is not done until it is in there. Add a `### <exact_tool_name>` entry under
 the right `##` category, matching the existing entries:
 

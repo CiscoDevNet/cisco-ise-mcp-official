@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "ise-mcp": {
+    "cisco-ise-mcp": {
       "type": "http",
       "url": "http://localhost:5000/mcp/",
       "headers": {

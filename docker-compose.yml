@@ -7,17 +7,17 @@
 #   DEV=true DEBUG=true docker compose up --build
 
 services:
-  ise-mcp-server:
+  cisco-ise-mcp:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         DEV: "${DEV:-false}"
         DEBUG: "${DEBUG:-false}"
-    image: ise-mcp-server
-    container_name: ise-mcp-server
+    image: cisco-ise-mcp-server
+    container_name: cisco-ise-mcp-server
     ports:
-      - "5000:5000"
+      - "${PORT:-5000}:${PORT:-5000}"
     env_file:
       - .env
     # Client-certificate auth: the ISE_CLIENT_CERT / ISE_CLIENT_KEY /
