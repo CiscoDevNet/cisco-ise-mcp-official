@@ -85,9 +85,9 @@ class ISESettings(BaseSettings):
     )
     # Minimum seconds between the START of consecutive AuthList downloads.
     # Proactively spaces large MnT downloads (SST's manual-delay finding).
-    # Default 0.0 = off; a call arriving sooner rejects fast with ISE_BUSY.
+    # A call arriving sooner rejects fast with ISE_BUSY. Set 0.0 to disable.
     mnt_gate_min_interval_s: float = Field(
-        default=0.0, ge=0.0, validation_alias="ISE_MNT_GATE_MIN_INTERVAL_S"
+        default=5.0, ge=0.0, validation_alias="ISE_MNT_GATE_MIN_INTERVAL_S"
     )
     # Adaptive breaker base backoff (seconds). The open window doubles per
     # consecutive MnT distress signal, starting from this value.

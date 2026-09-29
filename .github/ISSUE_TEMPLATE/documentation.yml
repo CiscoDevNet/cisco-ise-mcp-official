@@ -15,7 +15,7 @@ body:
       label: Which document?
       options:
         - README.md
-        - MCP_TOOLS_CATALOG.md
+        - docs/MCP_TOOLS_CATALOG.md
         - docs/CREATING_TOOLS.md
         - CONTRIBUTING.md
         - SECURITY.md

@@ -18,7 +18,7 @@ body:
     attributes:
       label: Pre-flight
       options:
-        - label: I checked [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/MCP_TOOLS_CATALOG.md) and no existing tool covers this
+        - label: I checked [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/docs/MCP_TOOLS_CATALOG.md) and no existing tool covers this
           required: true
         - label: I searched [existing issues](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues?q=is%3Aissue) for the same request
           required: true

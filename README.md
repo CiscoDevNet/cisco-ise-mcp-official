@@ -64,7 +64,9 @@ docker compose up
 DEV=true DEBUG=true docker compose up --build
 ```
 
-The server will be available at `http://localhost:5000`
+The server will be available at `http://localhost:5000`. Set `PORT` in your `.env`
+to use a different port — Compose publishes it on the host and the server listens
+on it in the container.
 
 ## Configuration
 
@@ -83,7 +85,7 @@ The server will be available at `http://localhost:5000`
 | `ISE_VERIFY_HOSTNAME` | Verify the server hostname/SAN (must be `false` when `ISE_VERIFY_SERVER_CERT=false`) | `true` | No |
 | `ISE_CA_BUNDLE` | Path to a CA / self-signed certificate to trust (replaces the system trust store when set) | — | No |
 | `ISE_MNT_GATE_MAX_CONCURRENCY` | Max concurrent heavy MnT reads (AuthList downloads and deployment-diagnostics summary), 1–4 | `1` | No |
-| `ISE_MNT_GATE_MIN_INTERVAL_S` | Min seconds between heavy MnT read starts (0 = off); raise to space large reads on big deployments | `0.0` | No |
+| `ISE_MNT_GATE_MIN_INTERVAL_S` | Min seconds between heavy MnT read starts (0 = off); raise to space large reads further apart on big deployments | `5.0` | No |
 | `ISE_MNT_GATE_BACKOFF_BASE_S` | Circuit-breaker base backoff after MnT distress (502/503/504/timeout) | `5.0` | No |
 | `ISE_MNT_GATE_BACKOFF_MAX_S` | Circuit-breaker max backoff | `300.0` | No |
 | `ISE_LOG_DOWNLOAD_MAX_CONCURRENCY` | Max node-log (`.log.zip`) downloads in flight at once, 1–4 | `1` | No |
@@ -121,13 +123,13 @@ transport can connect directly at the `/mcp/` endpoint. Start the server first
 Add the server with the CLI (recommended):
 
 ```bash
-claude mcp add --transport http ise-mcp http://localhost:5000/mcp/
+claude mcp add --transport http cisco-ise-mcp http://localhost:5000/mcp/
 ```
 
 To pass a per-user ISE credential header (optional — see [Authentication](#authentication)):
 
 ```bash
-claude mcp add --transport http ise-mcp http://localhost:5000/mcp/ \
+claude mcp add --transport http cisco-ise-mcp http://localhost:5000/mcp/ \
   --header "X-ISE-Authorization: Basic <base64(user:password)>"
 ```
 
@@ -135,7 +137,7 @@ Verify and inspect the connection:
 
 ```bash
 claude mcp list
-claude mcp get ise-mcp
+claude mcp get cisco-ise-mcp
 ```
 
 Alternatively, commit an `.mcp.json` at the project root so the server is shared
@@ -144,7 +146,7 @@ with anyone who checks out the repo:
 ```json
 {
   "mcpServers": {
-    "ise-mcp": {
+    "cisco-ise-mcp": {
       "type": "http",
       "url": "http://localhost:5000/mcp/"
     }
@@ -161,7 +163,7 @@ Claude Desktop currently speaks stdio, so bridge to the HTTP server with
 ```json
 {
   "mcpServers": {
-    "ise-mcp": {
+    "cisco-ise-mcp": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:5000/mcp/"]
     }
@@ -180,7 +182,7 @@ add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in the project):
 ```json
 {
   "mcpServers": {
-    "ise-mcp": {
+    "cisco-ise-mcp": {
       "url": "http://localhost:5000/mcp/"
     }
   }
@@ -237,7 +239,7 @@ keystore instead of a plaintext `.env`.
 
 ## Available Tools
 
-See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
+See [MCP_TOOLS_CATALOG.md](docs/MCP_TOOLS_CATALOG.md) for a complete list of available MCP tools.
 
 ## Considerations
 
@@ -245,7 +247,7 @@ See [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md) for a complete list of availabl
 
 Some tools enrich their results by reading ISE node logs — for example,
 `ise_diagnose_certificate_issues` scans `ise-psc.log` on PSN nodes for
-certificate/TLS error signals. Check [MCP_TOOLS_CATALOG.md](MCP_TOOLS_CATALOG.md)
+certificate/TLS error signals. Check [MCP_TOOLS_CATALOG.md](docs/MCP_TOOLS_CATALOG.md)
 for which tools read logs and which log files they need. A few things to know:
 
 - **A log must have been downloaded from the ISE UI at least once before.** Log
@@ -293,9 +295,10 @@ more precise but forces the scan.
 
 The `ISE_MNT_GATE_*` env vars in the [Configuration](#configuration) table tune
 this backpressure. **The defaults are intentionally restrictive** (one heavy read
-at a time). Raise the limits only with care and with headroom on your MnT node —
-each concurrent call is genuine load on ISE, so be mindful of the resource
-consumption you're adding. `ise_investigate_aaa_failure` (bounded, no full
+at a time, spaced at least 5 seconds apart). Raise the limits only with care and
+with headroom on your MnT node — each concurrent call is genuine load on ISE, so
+be mindful of the resource consumption you're adding.
+`ise_investigate_aaa_failure` (bounded, no full
 download) and `get_active_session_counts` (counters only) are also cheap.
 
 ## Development
@@ -325,6 +328,7 @@ API surface.
 ├── api_client_config/    # API client configuration YAML files
 ├── api_specs/            # OpenAPI specifications (JSON)
 ├── clients/              # HTTP and database clients
+├── docs/                 # Documentation (tool catalog, guides)
 ├── parsers/              # Response parsers
 ├── tools/                # MCP tool handlers
 ├── shared_libs/          # Shared utilities (timing, etc.)

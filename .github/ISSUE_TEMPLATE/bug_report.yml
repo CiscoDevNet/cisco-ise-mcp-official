@@ -28,7 +28,7 @@ body:
       label: Tool name
       description: >-
         The MCP tool that misbehaved, exactly as it appears in
-        [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/MCP_TOOLS_CATALOG.md).
+        [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/docs/MCP_TOOLS_CATALOG.md).
         Use `n/a` if the problem is in the server itself (startup, auth, transport).
       placeholder: ise_deployment_health
     validations:
