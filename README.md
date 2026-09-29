@@ -199,8 +199,11 @@ first that applies, in this order:
    (and no per-user header is present), the certificate is presented on the TLS
    connection and **no `Authorization` header is sent** — ISE identifies the API
    user from the certificate. Cert and key must be supplied together; add
-   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. For step-by-step setup
-   on the ISE side, see
+   `ISE_CLIENT_KEY_PASSWORD` only if the key is encrypted. Requires **ISE 3.3 or
+   later**; see
+   [Certificate-based authentication](docs/SECURITY_BEST_PRACTICES.md#certificate-based-authentication)
+   for key-strength and rotation guidance. For step-by-step setup on the ISE side,
+   see
    [How to configure certificate-based authentication for Cisco ISE](https://community.cisco.com/t5/security-blogs/how-to-configure-certificate-based-authentication-for-cisco-ise/bc-p/5372752).
 
    > **Note:** Certificate auth covers the ISE Open APIs only — not the MnT API.
@@ -228,114 +231,9 @@ nodes presenting self-signed or internal-CA certificates, configure trust via
 
 ## Security Best Practices
 
-This server talks to ISE's REST APIs — the ERS APIs and the Open APIs, both over
-HTTPS on port 443. Treat the credentials and certificates it uses as production
-secrets: source them in a secure manner (environment variables, a secrets
-manager, or a key management service — never hard-coded or committed), and apply
-the practices below.
-
-### Least-privilege API accounts
-
-API access requires a user (internal or from an external Active Directory group)
-mapped to one of the ERS roles. Grant the **narrowest** role that works:
-
-- **ERS Operator** — read-only (`GET` only). Prefer this for the service account,
-  since the tools here are primarily read/investigation oriented.
-- **ERS Admin** — full CRUD (`GET`, `POST`, `PUT`, `DELETE`). Use only if a
-  workflow genuinely needs writes.
-- **Super Admin** — can access all API services; avoid using it for automation.
-
-### Certificate-based authentication
-
-Certificate-based authentication for the ISE APIs is supported from **Cisco ISE
-Release 3.3 onwards** (see the
-[ISE 3.3 Release Notes](https://www.cisco.com/c/en/us/td/docs/security/ise/3-3/release_notes/b_ise_33_RN.html#concept_y2r_qph_gxb)).
-
-- **Rotate certificates regularly** on a defined schedule, issue them with
-  **shorter validity periods**, and **monitor expiration** with alerts.
-- Use **strong keys** — minimum **2048-bit RSA** or **256-bit ECC**.
-- Store the private key **encrypted at rest** and supply its passphrase
-  via `ISE_CLIENT_KEY_PASSWORD`.
-- For high-security production environments, manage certificates and keys with a
-  dedicated **Key Management Service** (HashiCorp Vault, AWS KMS, etc.).
-- Never commit `.env`, certificates, or key material to version control.
-
-### Storing secrets in the OS keystore
-
-Below are ways to keep a secret value — typically either `API_PWD` or
-`ISE_CLIENT_KEY_PASSWORD` — in your OS's encrypted store instead of a plaintext
-`.env`, then load it into an environment variable only when you launch the server.
-
-The examples store and read a single secret named `ise-api-pwd` and map it to
-`API_PWD`. The same process can be followed for other secrets, mapping each
-stored secret to its corresponding environment variable.
-
-#### macOS (Keychain)
-
-Store the secret once (you'll be prompted for the value with `-w`):
-
-```bash
-security add-generic-password -a "$USER" -s ise-api-pwd -w
-```
-
-Then read it into the environment when running the server:
-
-```bash
-export API_PWD="$(security find-generic-password -a "$USER" -s ise-api-pwd -w)"
-uv run server.py
-```
-
-To update the stored value, add `-U` to the `add-generic-password` command. To
-remove it: `security delete-generic-password -a "$USER" -s ise-api-pwd`.
-
-#### Linux (libsecret / `secret-tool`)
-
-`secret-tool` ships with libsecret (`sudo apt install libsecret-tools` on
-Debian/Ubuntu) and talks to your desktop keyring (GNOME Keyring, KWallet).
-
-Store the secret once (you'll be prompted to type it):
-
-```bash
-secret-tool store --label="ISE API password" service ise account api-pwd
-```
-
-Then read it into the environment when running the server:
-
-```bash
-export API_PWD="$(secret-tool lookup service ise account api-pwd)"
-uv run server.py
-```
-
-To remove it: `secret-tool clear service ise account api-pwd`.
-
-#### Windows (PowerShell + SecretManagement)
-
-Use the [SecretManagement](https://learn.microsoft.com/en-us/powershell/utility-modules/secretmanagement/overview)
-module with its local vault. Install once:
-
-```powershell
-Install-Module Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.SecretStore -Scope CurrentUser
-Register-SecretVault -Name LocalStore -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault
-```
-
-Store the secret once (you'll be prompted securely):
-
-```powershell
-Set-Secret -Name ise-api-pwd -Secret (Read-Host -AsSecureString "ISE API password")
-```
-
-Then read it into the environment when running the server:
-
-```powershell
-$env:API_PWD = Get-Secret -Name ise-api-pwd -AsPlainText
-uv run server.py
-```
-
-To remove it: `Remove-Secret -Name ise-api-pwd -Vault LocalStore`.
-
-> These commands set the environment variable only for the current shell session,
-> so the secret is never persisted to `.env`. Leave the corresponding key out of
-> your `.env` file so the value from the environment is used.
+See [docs/SECURITY_BEST_PRACTICES.md](docs/SECURITY_BEST_PRACTICES.md) —
+least-privilege ERS roles, certificate handling, and keeping secrets in the OS
+keystore instead of a plaintext `.env`.
 
 ## Available Tools
 
@@ -414,54 +312,11 @@ group as well, so no extra step is needed for the tooling below.
 uv run pytest
 ```
 
-### OpenAPI Clients
+### Creating a New Tool
 
-ISE OpenAPI endpoints are consumed through typed clients generated from OpenAPI
-specs, rather than hand-written HTTP calls. The moving parts:
-
-| Path | Purpose |
-|------|---------|
-| `api_specs/*.yaml` \| `*.json` | OpenAPI specs (one per API area, e.g. `policy-bundled.yaml`) |
-| `api_client_config/*.yaml` | [`openapi-python-client`](https://github.com/openapi-generators/openapi-python-client) generator config (package name, version, options) |
-| `autogenerated_api_clients/` | Generated client packages — **checked in**, but treated as generated output |
-| `scripts/generate_api_clients.sh` | Regenerates every enabled client |
-
-
-#### Preparing a spec
-
-Specs are sourced from the official
-[Cisco ISE API framework](https://developer.cisco.com/docs/identity-services-engine/latest/cisco-ise-api-framework/),
-then trimmed to the operations the server actually calls and placed under
-`api_specs/`. If a source spec uses external `$ref`s, bundle it into a single
-self-contained file first — see [api_specs/README.md](api_specs/README.md) for
-the Redocly bundling steps.
-
-#### Generator config
-
-Each client needs a generator config under `api_client_config/` that sets the
-package name, version, and options. Use the existing
-[`api_client_config/policy.yaml`](api_client_config/policy.yaml) as a template.
-
-#### Generating the clients
-
-Each client is produced by an `openapi-python-client generate` invocation. Add a
-block for your new client to
-[`scripts/generate_api_clients.sh`](scripts/generate_api_clients.sh), following
-the existing policy block, so it is regenerated with the rest:
-
-```bash
-uv run openapi-python-client generate \
-  --path api_specs/<name>.yaml \
-  --config api_client_config/<name>.yaml \
-  --output-path ./autogenerated_api_clients/ \
-  --overwrite
-```
-
-Then regenerate all enabled clients by running the script:
-
-```bash
-./scripts/generate_api_clients.sh
-```
+See [docs/CREATING_TOOLS.md](docs/CREATING_TOOLS.md) — the layer conventions,
+step-by-step walkthrough, and the OpenAPI client generation needed for a new ISE
+API surface.
 
 ## Project Structure
 
@@ -481,9 +336,14 @@ Then regenerate all enabled clients by running the script:
 
 ## Support
 
-For any issues, please
-[open a GitHub issue](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues).
-See [CONTRIBUTING.md](/CONTRIBUTING.md) for details.
+For bugs, new tool requests, documentation problems, and usage questions, please
+[open a GitHub issue](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues/new/choose)
+and pick the matching template. See [CONTRIBUTING.md](/CONTRIBUTING.md) for more details.
+
+**Cisco employees** can also join the internal Webex space for quicker questions
+and design discussion: [Join the Webex space][webex-space].
+
+[webex-space]: https://eurl.io/#meokmr05p
 
 ## License
 

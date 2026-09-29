@@ -77,6 +77,13 @@ Use `sessions_search_with_policy_details` when you need full policy rule definit
   - `nas_ipv6_address`: IPv6 address of the Network Access Server (may be null)
 - `sampling_note`: Present ONLY when the list is a truncated sample; states how many of the total matching sessions are shown. Absent when all results are returned or none matched.
 
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| MnT | `GET /admin/API/mnt/Session/AuthList/{start_time}/null` | 1 per request (streamed, then filtered client-side) |
+| Deployment | `GET /api/v1/deployment/node?filter=roles.EQ.PrimaryMonitoring` | 1 per process — one-time discovery of the MnT node to pin MnT traffic to; retried on the next MnT call until it succeeds |
+
 **Example response:**
 
 ```json
@@ -226,6 +233,15 @@ Use `sessions_search_with_policy_details` for full policy rule definitions.
   - `ise_policy_set_name`: Name of the ISE policy set that was applied
   - `authorization_policy_matched_rule`: Name of the matched authorization rule
 
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| MnT | `GET /admin/API/mnt/Session/AuthList/{start_time}/null` | 1 per request (streamed) |
+| MnT | `GET /admin/API/mnt/Session/MACAddress/{mac}` | 1 per session enriched (up to `limit`, max 10); at most 10 in flight (`ENRICHMENT_MAX_CONCURRENCY`) |
+| MnT | `GET /admin/API/mnt/Session/UserName/{username}` | fallback only — 1 additional call per session whose MAC lookup failed |
+| Deployment | `GET /api/v1/deployment/node?filter=roles.EQ.PrimaryMonitoring` | 1 per process (one-time MnT-node discovery) |
+
 **Example response:**
 
 ```json
@@ -325,6 +341,17 @@ Use `sessions_search_with_advanced_details` for auth profiles/posture only.
     - `authorization_rule`: name, profile, security_group, condition_summary
     - `resolution_errors`: list of errors if resolution failed (null otherwise)
   - `policy_context_note`: present instead of `policy_context` when no policy set name is found in session data
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| MnT | `GET /admin/API/mnt/Session/AuthList/{start_time}/null` | 1 per request (streamed) |
+| MnT | `GET /admin/API/mnt/Session/MACAddress/{mac}` (fallback `Session/UserName/{username}`) | 1 per session enriched (up to `limit`, max 10) |
+| Policy | `GET /api/v1/policy/network-access/policy-set` (`get_network_access_policy_set_list`) | 1 per unique matched (policy set, authn rule, authz rule) triple |
+| Policy | `GET /api/v1/policy/network-access/policy-set/{policy_id}/authentication` (`get_network_access_authentication_rule_list`) | 1 per unique triple that names an authn rule |
+| Policy | `GET /api/v1/policy/network-access/policy-set/{policy_id}/authorization` (`get_network_access_authorization_rule_list`) | 1 per unique triple that names an authz rule |
+| Deployment | `GET /api/v1/deployment/node?filter=roles.EQ.PrimaryMonitoring` | 1 per process (one-time MnT-node discovery) |
 
 **Example response:**
 
@@ -491,6 +518,15 @@ Use `sessions_search_with_policy_details` for full policy rules.
     - `text`: Human-readable message for the step (e.g., "Received RADIUS Access-Request"). Null if the step code was not found in the message catalog
     - `latency_ms`: Latency in milliseconds for this step (may be null if latency data is unavailable for this step)
   - `latency_context_note`: Present when execution steps could not be resolved or some step codes were missing from the message catalog
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| MnT | `GET /admin/API/mnt/Session/AuthList/{start_time}/null` | 1 per request (streamed) |
+| MnT | `GET /admin/API/mnt/Session/MACAddress/{mac}` (fallback `Session/UserName/{username}`) | 1 per candidate session — up to `limit` (max 10) normally, but up to `ENRICHMENT_CAP` (100) whenever `min_latency_ms` / `max_latency_ms` is set; at most 10 in flight (`ENRICHMENT_MAX_CONCURRENCY`) |
+| Deployment | `GET /api/v1/deployment/node?filter=roles.EQ.PrimaryMonitoring` | 1 per process (one-time MnT-node discovery) |
+| Local | `msg_cat.xml` execution-step code-to-text lookup — in-memory, not a REST API call | 0 |
 
 **Example response:**
 
@@ -682,6 +718,16 @@ An empty result is not proof the authentication never happened: an Access-Reject
     - `text`: Human-readable step message (null if code not found in catalog)
   - `failure_context_note`: Present when enrichment is partial (e.g. unknown failure code)
 
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| MnT | `GET /admin/API/mnt/AuthStatus/MACAddress/{mac}/{seconds}/{records}/All` | 1, only when `calling_station_id` is supplied (`records` = `min(limit * 2, 10)`) |
+| MnT | `GET /admin/API/mnt/Session/UserName/{username}` | 1, only when `username` is supplied AND the MAC lookup found no failures (or no MAC was supplied) |
+| MnT | `GET /admin/API/mnt/FailureReasons` | 1 per process — lazily fetched on the first investigation; a failure is not cached, so it retries on the next call |
+| Deployment | `GET /api/v1/deployment/node?filter=roles.EQ.PrimaryMonitoring` | 1 per process (one-time MnT-node discovery) |
+| Local | `msg_cat.xml` execution-step code-to-text lookup — in-memory, not a REST API call | 0 |
+
 **Example response:**
 
 ```json
@@ -778,6 +824,13 @@ Use `ise_search_authentication_rules` to find authentication rules across all po
 
 **Returns:** JSON object with `search_filters`, `total_count`, `count`, `has_more`, and `policy_sets[]` sorted by `rank` ASC. Each policy set carries: `name`, `description`, `state`, `rank`, `hit_counts`, `is_default`, `service_name`, `is_proxy`, `condition_summary`. Use `name` to chain into `ise_search_authorization_rules` or `ise_search_authentication_rules`.
 
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| Policy | `GET /api/v1/policy/network-access/policy-set` (`get_network_access_policy_set_list`) | 1 per request |
+
+
 ---
 
 ### ise_search_authorization_rules
@@ -812,6 +865,15 @@ Use `ise_search_policy_sets` to discover policy set names to pass via `policy_se
 
 
 **Returns:** JSON object with `search_filters`, `total_count`, `count`, `has_more`, `policy_sets_scanned`, `policy_sets_total`, `rules[]` (per-policy-set hits with `policy_set_name`, `name`, `rank`, `state`, `hit_counts`, `profile`, `security_group`, `condition_summary`), and `global_exceptions[]` (no `policy_set_name`).
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| Policy | `GET /api/v1/policy/network-access/policy-set` (`get_network_access_policy_set_list`) | 1 per request — used to resolve `policy_set_name` to an id, or to enumerate the fan-out targets |
+| Policy | `GET /api/v1/policy/network-access/policy-set/{policy_id}/authorization` (`get_network_access_authorization_rule_list`) | 1 when `policy_set_name` is given; otherwise 1 per policy set scanned, capped at `_MAX_FAN_OUT_POLICY_SETS` (25) |
+| Policy | `GET /api/v1/policy/network-access/policy-set/global-exception` (`get_network_access_global_exception_rule_list`) | 1 per request (always) |
+
 
 **Best practices:**
 
@@ -859,6 +921,14 @@ Use `ise_search_policy_sets` to discover policy set names to pass via `policy_se
 - Every policy set is scanned unless you name one. Confirm coverage via `policy_sets_scanned == policy_sets_total`.
 - `identity_source_filter` is an exact match — omit it first to see the identity store names in use, then pass one verbatim.
 - Use `max_hit_counts=0` to find unused authn rules.
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| Policy | `GET /api/v1/policy/network-access/policy-set` (`get_network_access_policy_set_list`) | 1 per request — used to resolve `policy_set_name` to an id, or to enumerate the fan-out targets |
+| Policy | `GET /api/v1/policy/network-access/policy-set/{policy_id}/authentication` (`get_network_access_authentication_rule_list`) | 1 when `policy_set_name` is given; otherwise 1 per policy set scanned, capped at `_MAX_FAN_OUT_POLICY_SETS` (25) |
+
 
 ---
 
@@ -919,6 +989,13 @@ When `hostnames` is set the result describes ONLY the named nodes (`scope: "filt
 - `diagnostics`: Present only when `diagnostics=true`, otherwise omitted:
   - `observations`: Human-readable derived observations about node health (node status, PAN redundancy, and any processes reporting "down").
   - `system_stats`: Per-node system statistics from the MnT `getSystemSummaryDetails` API: top-level `duration_minutes` (60) and `nodes` (keyed by hostname). Each node has `cpu_percent` / `memory_percent` / `latency` (each a `{min, max, avg, latest}` object, or null when no samples). Down processes are not in this block; they are reported in `observations` as `"<host>: process(es) not running: ..."`. If the MnT node is busy or the call/parse fails, `system_stats` is `{status: "unavailable", reason}` instead (the base summary is unaffected).
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| Deployment | `GET /api/v1/deployment/node` (`getDeploymentNodes`) | 1 per request; `hostnames` is sent as `filter=hostname.EQ.<host>` (plus `filterType=OR` when more than one is given) |
+| MnT | `GET /admin/API/mnt/dashboard/getSystemSummaryDetails` | 1, only when `diagnostics=true` — one call covers every node (streamed, then scoped client-side to the node list) |
 
 **Use when:**
 
@@ -1005,6 +1082,15 @@ Set `scan_logs=false` for a quick "are any certs expiring?" check. Keep it true 
   - `coverage_note`: Human-readable "scanned X of Y PSN node(s)" summary
 - `verdict`: `critical` (any expired cert OR any log signal), `warning` (expiring certs only, no signals), or `healthy`
 - `checked_at`: ISO 8601 timestamp of the diagnosis (UTC)
+
+**ISE APIs invoked:**
+
+| API | Operation | Calls |
+|-----|-----------|-------|
+| Certificates | `GET /api/v1/certs/trusted-certificate` (`getTrustedCertificates`) | 1 per page, up to `_MAX_PAGES` (3), with `size=_ISE_PAGE_SIZE` (100), `sort=ASC`, `sortBy=expirationDate`, `filter=expirationDate.LT.<cutoff>`; stops early once `limit` is satisfied or ISE reports no `nextPage` |
+| Deployment | `GET /api/v1/deployment/node` (`getDeploymentNodes`) | 1, only when `scan_logs=true` — sent unfiltered; PSN selection and `hostnames` narrowing are client-side |
+| Admin UI | `GET /admin/{node}-ise-psc.log.zip` — cookie-authenticated admin web-UI file download, not a REST API call | 1 per PSN node scanned, capped at `_MAX_PSN_NODES` (5); concurrent downloads capped by `ISE_LOG_DOWNLOAD_MAX_CONCURRENCY` (default 1) |
+
 
 **Use when:**
 

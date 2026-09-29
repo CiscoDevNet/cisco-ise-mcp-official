@@ -1,0 +1,52 @@
+name: Question / usage help
+description: Ask how to do something, or whether a behavior is expected
+labels: ["question", "needs-triage"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I checked the [README](https://github.com/CiscoDevNet/cisco-ise-mcp-official#readme) and [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/MCP_TOOLS_CATALOG.md)
+          required: true
+        - label: I searched [existing issues](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues?q=is%3Aissue)
+          required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to accomplish, and where are you stuck?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you've tried
+      description: Prompts, tool calls, or config you've already attempted, and what happened.
+
+  - type: input
+    id: ise-version
+    attributes:
+      label: ISE version
+      placeholder: "3.3 Patch 4"
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: A release tag or short commit SHA.
+      placeholder: v1.2.3 or a1b2c3d
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Code
+        - Claude Desktop
+        - Cursor
+        - VS Code
+        - Other / direct HTTP
+        - Not applicable

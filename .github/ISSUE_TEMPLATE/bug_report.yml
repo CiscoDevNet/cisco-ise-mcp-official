@@ -1,0 +1,155 @@
+name: Bug report
+description: A tool returns wrong data, errors out, or the server misbehaves
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        **Before you post — redact everything sensitive.** Issues are public. Strip
+        passwords, API credentials, `X-ISE-Authorization` header values, private keys,
+        real usernames, MAC addresses, and internal hostnames/IPs from anything you
+        paste. Placeholders like `ise.example.com` / `user@example.com` are fine.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [existing issues](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues?q=is%3Aissue) and this is not a duplicate
+          required: true
+        - label: I have removed all credentials and other sensitive data from this report
+          required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name
+      description: >-
+        The MCP tool that misbehaved, exactly as it appears in
+        [MCP_TOOLS_CATALOG.md](https://github.com/CiscoDevNet/cisco-ise-mcp-official/blob/main/MCP_TOOLS_CATALOG.md).
+        Use `n/a` if the problem is in the server itself (startup, auth, transport).
+      placeholder: ise_deployment_health
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+      placeholder: |
+        Expected: sessions for the last 30 minutes.
+        Actual: ISE_BUSY on every call, even with no other clients connected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >-
+        The prompt or tool call you made, including argument values. If you can
+        reproduce it outside an MCP client (curl, a test), that is even better.
+      placeholder: |
+        1. Start the server: `uv run server.py`
+        2. From Claude Code, ask: "show me failed authentications in the last hour"
+        3. Tool called: active_sessions_search(minutes=60, limit=500)
+        4. Every call returns ISE_BUSY
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Tool output / error
+      description: >-
+        The error code and message the tool returned (e.g. `ISE_BUSY`,
+        `ISE_CONNECTION_ERROR`). Paste the response body if you have it. Redact first.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs
+      description: >-
+        Relevant lines from the MCP server's own output. Reproduce with `DEBUG=true`
+        for more detail. Redact hostnames and credentials.
+      render: text
+
+  - type: input
+    id: ise-version
+    attributes:
+      label: ISE version
+      description: From the ISE admin UI, or `show version` on the node.
+      placeholder: "3.3 Patch 4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: ISE deployment type
+      options:
+        - Standalone (single node, all personas)
+        - Distributed (separate PAN / MnT / PSN)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth-mode
+    attributes:
+      label: Authentication mode in use
+      description: >-
+        See [Authentication](https://github.com/CiscoDevNet/cisco-ise-mcp-official#authentication).
+      options:
+        - Service account (API_USERNAME / API_PWD)
+        - Per-user header (X-ISE-Authorization)
+        - Client certificate (ISE_CLIENT_CERT / ISE_CLIENT_KEY)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Code
+        - Claude Desktop
+        - Cursor
+        - VS Code
+        - Other / direct HTTP
+
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: A [release](https://github.com/CiscoDevNet/cisco-ise-mcp-official/releases) tag, or the commit SHA from `git rev-parse --short HEAD`.
+      placeholder: v1.2.3 or a1b2c3d
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: How are you running the server?
+      options:
+        - uv run server.py
+        - docker compose up
+        - Other
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Non-default configuration
+      description: >-
+        Any [Configuration](https://github.com/CiscoDevNet/cisco-ise-mcp-official#configuration)
+        env vars you changed from their defaults — **names and values only, never secrets.**
+        `ISE_MNT_GATE_*`, `ISE_VERIFY_*`, and `ISE_LOG_DOWNLOAD_*` are the usual suspects.
+      placeholder: |
+        ISE_MNT_GATE_MAX_CONCURRENCY=4
+        ISE_VERIFY_HOSTNAME=false
+      render: text

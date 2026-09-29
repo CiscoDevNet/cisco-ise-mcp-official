@@ -16,8 +16,13 @@ any real-time space e.g., Slack, Discord, etc.
 Before reporting a new issue, please ensure that the issue was not already reported or fixed by searching through our
 [issues list](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues).
 
-When creating a new issue, please be sure to include a **title and clear description**, as much relevant information as
-possible, and, if possible, a test case.
+When creating a new issue, please
+[pick the matching template](https://github.com/CiscoDevNet/cisco-ise-mcp-official/issues/new/choose) — bug report, new
+tool request, documentation issue, or question. Please be sure to include a **title and clear description**, as much
+relevant information as possible, and, if possible, a test case.
+
+**Issues are public.** Redact credentials, `X-ISE-Authorization` header values, private keys, real usernames, MAC
+addresses, and internal hostnames before posting.
 
 **If you discover a security bug, please do not report it through GitHub. Instead, please see security procedures in
 [SECURITY.md](/SECURITY.md).**
@@ -30,8 +35,7 @@ has been discussed in the past, or if the change was already implemented but not
 We expect new pull requests to include tests for any affected behavior, and, as we follow semantic versioning, we may
 reserve breaking changes until the next major version release.
 
-- For dev environment setup, running tests, and generating the OpenAPI clients, see
-  [Development](README.md#development) in the README.
+- For dev environment setup and running tests, see [Development](README.md#development) in the README.
 
 ## Other Ways to Contribute
 
