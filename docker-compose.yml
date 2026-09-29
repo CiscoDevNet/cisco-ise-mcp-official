@@ -16,9 +16,6 @@ services:
         DEBUG: "${DEBUG:-false}"
     image: cisco-ise-mcp-server
     container_name: cisco-ise-mcp-server
-    # PORT is read from ./.env (Compose interpolates it) and is used for both
-    # the published host port and the port the server listens on inside the
-    # container, so changing it in .env is enough.
     ports:
       - "${PORT:-5000}:${PORT:-5000}"
     env_file:

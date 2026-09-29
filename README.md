@@ -64,9 +64,7 @@ docker compose up
 DEV=true DEBUG=true docker compose up --build
 ```
 
-The server will be available at `http://localhost:5000`. Set `PORT` in your `.env`
-to use a different port — Compose publishes it on the host and the server listens
-on it in the container.
+The server will be available at `http://localhost:5000`
 
 ## Configuration
 
