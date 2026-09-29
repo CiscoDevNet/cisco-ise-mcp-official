@@ -300,7 +300,7 @@ class AuthorizationRuleSearchResult(IseResultModel):
     # No companion "note" field here. A constant string shipped alongside the
     # list read as a finding rather than as guidance: with global_exceptions=[]
     # the agent still reported that global exceptions were overriding the
-    # rules. CSCwv90746. The steering now lives in the field description above,
+    # rules. The steering now lives in the field description above,
     # where the agent reads it as schema documentation instead of as data.
 
 

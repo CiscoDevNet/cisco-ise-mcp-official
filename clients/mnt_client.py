@@ -82,12 +82,14 @@ __all__ = [
 
 # Attached to every MnT request to suppress the shared client's cookie jar.
 #
-# The singleton ``httpx.AsyncClient`` accumulates ISE ``Set-Cookie`` values
-# (notably ``JSESSIONID``) across calls, and ISE honours a presented session
-# cookie OVER the ``Authorization`` header. So a cookie minted for one user
-# leaks onto the next user's request: if the second user has higher privileges
-# than the first, ISE authorizes against the stale lower-privilege session and
-# returns 401 until it expires server-side (~1 hour). CSCwv87002.
+# The singleton ``httpx.AsyncClient`` retains ISE ``Set-Cookie`` values across
+# calls. Because that client is shared by every concurrent caller, a retained
+# cookie is per-request state outliving the request that produced it. Each MnT
+# call must therefore be authenticated solely by the explicit credential it
+# carries, with nothing inherited from an earlier call.
+#
+# DO NOT REMOVE: this header is what keeps per-call credentials isolated on a
+# shared client. Covered by ``TestMNTClientCookieSuppression``.
 #
 # WHY AN EMPTY STRING RATHER THAN A CLIENT SETTING: httpx has no switch to
 # disable the jar. ``http.cookiejar.CookieJar.add_cookie_header`` injects the
@@ -163,7 +165,7 @@ class MNTClient:
 
         # --- one-time MnT-FQDN discovery state ----------------------
         # ``_mnt_fqdn`` is the FQDN we extracted from the Deployment API
-        # response (e.g. ``piyukum3-79.sn.test``), or ``None`` if we
+        # response (e.g. ``mnt1.example.com``), or ``None`` if we
         # never discovered one. ``_discovery_succeeded`` flips to True
         # the first time we either (a) got a valid FQDN, OR (b) got an
         # empty ``response`` array from the Deployment API (standalone

@@ -1005,7 +1005,7 @@ class TestFailureLookbackFallback:
     A narrow lookback finding nothing was the most common false negative here:
     the failure the user is asking about is usually older than the window. After
     AuthStatus comes up empty, the MAC's most recent session is consulted, which
-    is not time-bounded. CSCwv66240
+    is not time-bounded.
     """
 
     @staticmethod
@@ -1140,7 +1140,7 @@ class TestFailureToolDefaultLookback:
     @pytest.mark.asyncio
     async def test_tool_defaults_to_24h_not_60_minutes(self):
         """A 60-minute default was the documented cause of spurious
-        "no failure found" answers. CSCwv66240"""
+        "no failure found" answers."""
         from unittest.mock import patch
 
         with patch("server.failure_tool_handler") as mock_handler:

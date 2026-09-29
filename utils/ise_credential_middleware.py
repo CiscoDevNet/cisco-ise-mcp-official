@@ -20,8 +20,8 @@ from logger import logger
 from models.error_models import ErrorCategory, raise_tool_error
 
 # Tools whose parameter surface is narrow enough that an agent passing an
-# unsupported keyword is a recurring failure mode worth a bespoke hint
-# (CSCwv61926). Maps tool name -> the sentence appended to the generic
+# unsupported keyword is a recurring failure mode worth a bespoke hint.
+# Maps tool name -> the sentence appended to the generic
 # "Unsupported parameter(s)" message.
 _UNSUPPORTED_PARAM_HINTS: dict[str, str] = {
     "ise_investigate_aaa_failure": (
@@ -139,7 +139,7 @@ class IseCredentialMiddleware(Middleware):
             # [type=unexpected_keyword_argument, ...]`) reads as an internal
             # crash rather than "you passed a bad argument", so agents retry
             # the same call instead of correcting it. Translate to a
-            # CLIENT_ERROR that names the offending fields. CSCwv61926.
+            # CLIENT_ERROR that names the offending fields.
             raise_tool_error(
                 ErrorCategory.CLIENT_ERROR,
                 "INVALID_INPUT",

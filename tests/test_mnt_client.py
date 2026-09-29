@@ -267,12 +267,12 @@ class TestMNTClientResolveAuth:
 
 
 class TestMNTClientCookieSuppression:
-    """Every MnT call must present an empty Cookie header (CSCwv87002).
+    """Every MnT call must present an empty Cookie header.
 
-    The singleton client's jar accumulates ISE JSESSIONID cookies, and ISE
-    honours a session cookie over the Authorization header -- so without this
-    a cookie from a lower-privilege user makes the next (higher-privilege)
-    user's request 401 until the ISE-side session expires.
+    The singleton client's jar would otherwise retain ISE ``Set-Cookie``
+    values across calls, letting state from one request reach the next on a
+    client shared by all callers. Each call must be authenticated solely by
+    the explicit credential it carries.
     """
 
     def setup_method(self):

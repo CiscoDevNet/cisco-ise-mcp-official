@@ -186,7 +186,7 @@ class TestValidationErrorTranslation:
 
     Unwrapped, its repr reads like an internal crash, so agents retry the same
     bad call instead of correcting it. The middleware must convert it into a
-    CLIENT_ERROR that names the offending fields. CSCwv61926.
+    CLIENT_ERROR that names the offending fields.
     """
 
     @staticmethod

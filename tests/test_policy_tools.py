@@ -477,7 +477,7 @@ class TestSearchAuthorizationRules:
         assert result.global_exceptions[0].policy_set_name is None
         assert result.global_exceptions[0].name == "GlobalDeny"
         # The "these override everything" steering lives in the field
-        # description, not in a constant data field -- see CSCwv90746.
+        # description, not in a constant data field.
         note = AuthorizationRuleSearchResult.model_fields["global_exceptions"].description
         assert "override" in note.lower()
 
