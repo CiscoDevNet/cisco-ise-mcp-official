@@ -1,0 +1,24 @@
+uv.lock
+  s_2a4e97c8d353d7::t_9b6bf7e2ffb269 919,921,923
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.4",
+  "base_commit_sha": "03ea2bc80b033999ce912541813f03901c74c650",
+  "prompts": {},
+  "humans": {
+    "h_8174d5833ba005": {
+      "author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  },
+  "sessions": {
+    "s_2a4e97c8d353d7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "53ba1d43-3527-40b3-bda5-678779708943",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ronan Dsouza <ronadsou@cisco.com>"
+    }
+  }
+}
