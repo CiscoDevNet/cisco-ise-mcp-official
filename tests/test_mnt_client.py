@@ -657,6 +657,9 @@ class TestMNTClientGetStream:
 
                 class FakeResponse:
                     status_code = 200
+                    # get_stream buffers only non-2xx bodies, so a success
+                    # response must report is_success to stay unbuffered.
+                    is_success = True
                     def raise_for_status(self):
                         return None
                     async def aiter_bytes(self):
@@ -681,3 +684,59 @@ class TestMNTClientGetStream:
                 assert got == chunks
             finally:
                 reset_per_user_credential(token)
+
+    async def _assert_error_body_readable(self, monkeypatch, status_code: int, headers=None):
+        """Drive get_stream against *status_code* and return the raised error.
+
+        The stub body is delivered as a stream rather than via
+        ``httpx.Response(content=...)``: that kwarg populates ``_content``
+        eagerly, so ``.text`` would work whether or not get_stream buffered
+        anything and the assertion could never fail.
+        """
+        from clients.mnt_client import MNTClient
+        from clients.request_context import set_per_user_credential, reset_per_user_credential
+
+        error_body = b"<mnt-rest-result><internal-error-info>MnT busy</internal-error-info></mnt-rest-result>"
+
+        class _StreamOnlyBody(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield error_body
+
+        with patch("clients.mnt_client.settings") as mock_settings:
+            mock_settings.api_port = 443
+            token = set_per_user_credential(None)
+            http_client = None
+            try:
+                client = MNTClient()
+
+                async def _no_discovery():
+                    client._discovery_succeeded = True
+                monkeypatch.setattr(client, "_ensure_mnt_target", _no_discovery)
+
+                async def handler(request):
+                    return httpx.Response(
+                        status_code,
+                        stream=_StreamOnlyBody(),
+                        headers=headers,
+                        request=request,
+                    )
+
+                http_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+                monkeypatch.setattr(client, "_get_client", AsyncMock(return_value=http_client))
+                monkeypatch.setattr(client, "_resolve_per_call_auth", lambda: ({}, "service_account"))
+
+                with pytest.raises(httpx.HTTPStatusError) as exc_info:
+                    async with client.get_stream("Session/AuthList/x/null"):
+                        pass
+
+                assert exc_info.value.response.status_code == status_code
+                assert exc_info.value.response.text == error_body.decode()
+            finally:
+                if http_client is not None:
+                    await http_client.aclose()
+                reset_per_user_credential(token)
+
+    @pytest.mark.asyncio
+    async def test_get_stream_buffers_error_body_before_raising(self, monkeypatch):
+        await self._assert_error_body_readable(monkeypatch, 502)
+
