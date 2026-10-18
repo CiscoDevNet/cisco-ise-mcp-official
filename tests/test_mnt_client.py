@@ -740,3 +740,12 @@ class TestMNTClientGetStream:
     async def test_get_stream_buffers_error_body_before_raising(self, monkeypatch):
         await self._assert_error_body_readable(monkeypatch, 502)
 
+    @pytest.mark.asyncio
+    async def test_get_stream_buffers_redirect_body_before_raising(self, monkeypatch):
+        """
+        A 3xx raises too, and sits outside ``response.is_error``.
+        """
+        await self._assert_error_body_readable(
+            monkeypatch, 302, headers={"location": "/admin/login.jsp"},
+        )
+
