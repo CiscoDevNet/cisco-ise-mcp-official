@@ -121,33 +121,47 @@ class FailureToolHandler:
         """Wrap MNT API calls with consistent error handling."""
         try:
             yield
-        except (httpx.TimeoutException, httpx.ConnectError) as e:
-            tls = find_tls_error(e)
-            if tls is not None:
-                logger.error("ISE MNT API TLS verification failed", error=str(tls))
-                raise_tool_error(
-                    ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
-                    "TLS verification failed connecting to the ISE MNT API. Check the ISE "
-                    "server certificate, the trusted CA bundle, and that the hostname matches "
-                    "the certificate SAN.",
-                    retry=False,
-                )
+        except httpx.RequestError as e:
+            # Mirrors SessionToolHandler._handle_mnt_errors: every
+            # transport-level failure (refused connects, DNS, timeouts, and a
+            # connection dropped mid-body) is "unreachable", and the TLS probe
+            # stays scoped to ConnectError so a read timeout over TLS -- which
+            # carries a benign ssl.SSLWantReadError in its __context__ chain --
+            # is not reported as a certificate problem.
+            if isinstance(e, httpx.ConnectError):
+                tls = find_tls_error(e)
+                if tls is not None:
+                    logger.error("ISE MNT API TLS verification failed", error=str(tls))
+                    raise_tool_error(
+                        ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
+                        "TLS verification failed connecting to the ISE MNT API. Check the ISE "
+                        "server certificate, the trusted CA bundle, and that the hostname matches "
+                        "the certificate SAN.",
+                        retry=False,
+                    )
             logger.exception("ISE MNT API unreachable", error=str(e))
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_UNREACHABLE",
-                "The ISE MNT API is unreachable or timed out. Try again later.",
+                "The ISE MNT API is unreachable, timed out, or dropped the connection. "
+                "Try again later.",
                 retry=True,
             )
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            logger.exception("ISE MNT API HTTP error", status_code=status_code)
-            # ISE puts the only human-readable cause in <internal-error-info>;
-            # without it every backend fault is an opaque "HTTP 500".
+            # <internal-error-info> goes to the operator log, capped, and never
+            # into the tool error: it names nodes and internal components and
+            # would land verbatim in the model context. Callers that must tell
+            # "no records for this identifier" from a real fault classify the
+            # body programmatically (see _fetch_failures_by_mac).
             detail = parse_mnt_error_body(e.response.text) if e.response.text else None
+            logger.exception(
+                "ISE MNT API HTTP error",
+                status_code=status_code,
+                mnt_detail=detail[:200] if detail else None,
+            )
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_API_ERROR",
-                f"ISE MNT API error: {detail}" if detail
-                else f"ISE MNT API returned HTTP {status_code}.",
+                f"The ISE MNT API could not complete this request (HTTP {status_code}).",
                 retry=status_code >= 500,
             )
         except McpToolError:
