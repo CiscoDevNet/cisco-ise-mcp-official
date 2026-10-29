@@ -90,6 +90,55 @@ The server will be available at `http://localhost:5000`
 | `HOST` | Address the MCP server binds to | `0.0.0.0` | No |
 | `PORT` | Port the MCP server listens on | `5000` | No |
 | `DEBUG_MCP` | Set to `true` for DEBUG-level logs; otherwise INFO | `false` | No |
+| `LOG_FILE` | Optional file log path; stderr console logging continues | — | No |
+| `LOG_FILE_FORMAT` | File format: `jsonl` or `text` | `jsonl` | No |
+| `LOG_FILE_MAX_BYTES` | Rotate the file after this many bytes | `10485760` (10 MiB) | No |
+| `LOG_FILE_BACKUP_COUNT` | Number of rotated files to retain | `5` | No |
+
+### File-based audit trail
+
+Set `LOG_FILE` to write the existing structured log events, including MCP tool
+activity and ISE API calls, to a file. File logging is opt-in; no file is created
+unless `LOG_FILE` is set. `LOG_FILE_FORMAT=jsonl` writes one JSON object per line
+(the default), while `LOG_FILE_FORMAT=text` writes human-readable lines without
+ANSI colors. The selected format is the only format written to the file.
+Human-readable stderr logging remains enabled either way. Each JSON event
+includes its timestamp, level, logger name, source filename and line number,
+plus any event-specific fields.
+
+For a local run, create a directory accessible to the server process and add
+these values to `.env`:
+
+```bash
+mkdir -p logs
+chmod 700 logs
+```
+
+```dotenv
+LOG_FILE=logs/ise-mcp.jsonl
+LOG_FILE_FORMAT=jsonl
+LOG_FILE_MAX_BYTES=10485760
+LOG_FILE_BACKUP_COUNT=5
+```
+
+For plain text instead, set `LOG_FILE_FORMAT=text` and use a `.log` file path.
+Use a new `LOG_FILE` path when switching formats: existing files are appended
+to, and their previous contents are not converted.
+
+For local runs, explicitly load the `.env` values into the process environment:
+
+```bash
+uv run --env-file .env server.py
+```
+
+Docker Compose already loads these values through its `env_file` setting.
+
+The active file rotates when it reaches `LOG_FILE_MAX_BYTES`; up to
+`LOG_FILE_BACKUP_COUNT` numbered backups are kept. Both limits must be positive
+integers. The parent directory must already exist and be writable. If running
+with Docker Compose, use a path inside a mounted volume for `LOG_FILE` so logs
+survive container replacement. Protect the directory as operational logs may
+contain sensitive ISE details.
 
 The server authenticates to ISE with one of three credential types: the
 per-user `X-ISE-Authorization` header, a client certificate (`ISE_CLIENT_CERT` /
