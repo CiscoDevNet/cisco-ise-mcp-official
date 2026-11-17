@@ -65,32 +65,53 @@ class SessionToolHandler:
         """Wrap MNT API calls with consistent error handling."""
         try:
             yield
-        except (httpx.TimeoutException, httpx.ConnectError) as e:
-            tls = find_tls_error(e)
-            if tls is not None:
-                logger.error("ISE MNT API TLS verification failed", error=str(tls))
-                raise_tool_error(
-                    ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
-                    "TLS verification failed connecting to the ISE MNT API. Check the ISE "
-                    "server certificate, the trusted CA bundle, and that the hostname matches "
-                    "the certificate SAN.",
-                    retry=False,
-                )
+        except httpx.RequestError as e:
+            # Every transport-level failure: refused connects, DNS, timeouts,
+            # and a connection dropped mid-body (RemoteProtocolError), which is
+            # how the MnT node sheds a concurrent AuthList download. None of
+            # them produced an HTTP status, so all of them are "unreachable".
+            #
+            # The TLS probe is scoped to ConnectError deliberately. A handshake
+            # failure surfaces as ConnectError wrapping an ssl.SSLError, but a
+            # read timeout over TLS also carries a benign ssl.SSLWantReadError
+            # in its __context__ chain -- probing every RequestError would
+            # report ordinary timeouts as certificate problems.
+            if isinstance(e, httpx.ConnectError):
+                tls = find_tls_error(e)
+                if tls is not None:
+                    logger.error("ISE MNT API TLS verification failed", error=str(tls))
+                    raise_tool_error(
+                        ErrorCategory.EXTERNAL_ERROR, "ISE_TLS_VERIFICATION_FAILED",
+                        "TLS verification failed connecting to the ISE MNT API. Check the ISE "
+                        "server certificate, the trusted CA bundle, and that the hostname matches "
+                        "the certificate SAN.",
+                        retry=False,
+                    )
             logger.exception("ISE MNT API unreachable", error=str(e))
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_UNREACHABLE",
-                "The ISE MNT API is unreachable or timed out. Try again later.", retry=True,
+                "The ISE MNT API is unreachable, timed out, or dropped the connection. "
+                "Try again later.",
+                retry=True,
             )
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            logger.exception("ISE MNT API HTTP error", status_code=status_code)
-            # ISE puts the only human-readable cause in <internal-error-info>;
-            # without it every backend fault is an indistinguishable "HTTP 500".
+            # <internal-error-info> is ISE's only statement of cause, so it goes
+            # to the operator log -- capped, because the field is unbounded --
+            # and NOT into the tool error. It names nodes and internal
+            # components, sometimes identifiers, and an agent-visible message
+            # lands verbatim in the model context. Callers that need to tell
+            # "no such session" from a real fault classify the body
+            # programmatically instead; see _empty_on_no_session.
             detail = parse_mnt_error_body(e.response.text) if e.response.text else None
+            logger.exception(
+                "ISE MNT API HTTP error",
+                status_code=status_code,
+                mnt_detail=detail[:200] if detail else None,
+            )
             raise_tool_error(
                 ErrorCategory.EXTERNAL_ERROR, "ISE_API_ERROR",
-                f"ISE MNT API error: {detail}" if detail
-                else f"ISE MNT API returned HTTP {status_code}.",
+                f"The ISE MNT API could not complete this request (HTTP {status_code}).",
                 retry=status_code >= 500,
             )
         except McpToolError:

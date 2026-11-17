@@ -593,9 +593,10 @@ class MNTClient:
         Mirrors ``get()`` (endpoint validation, one-time FQDN discovery,
         per-call auth selection, URL-under-base assertion) but opens an
         httpx streaming response so the caller can consume the body
-        incrementally via ``response.aiter_bytes()``. ``raise_for_status``
-        runs on the response headers before yielding, so HTTP errors
-        (e.g. 502) surface to the caller/gate before any body is read.
+        incrementally via ``response.aiter_bytes()``. Non-2xx responses are
+        buffered before ``raise_for_status`` so downstream error handling can
+        inspect the small ISE error payload; successful AuthList responses are
+        never buffered.
         """
         validate_endpoint(endpoint)
         client = await self._get_client()
@@ -612,6 +613,8 @@ class MNTClient:
             mnt_fqdn_pinned=bool(self._mnt_fqdn),
         )
         async with client.stream("GET", url, **per_call_kwargs) as response:
+            if not response.is_success:
+                await response.aread()
             response.raise_for_status()
             logger.info("MNT API stream response", status_code=response.status_code, url=url)
             yield response

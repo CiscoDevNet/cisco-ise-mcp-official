@@ -628,6 +628,79 @@ class TestSessionToolHandlerSearchActiveSessions:
         assert "500" in data["message"]
         assert data["retry"] is True
 
+    @pytest.mark.asyncio
+    async def test_dropped_connection_is_retryable_not_internal_error(self):
+        """ISE drops a concurrent AuthList mid-body; that is an ISE condition.
+
+        httpx reports it as RemoteProtocolError, which is neither a timeout nor
+        a connect failure -- it must still map to ISE_UNREACHABLE rather than
+        falling through to INTERNAL_ERROR and telling the agent the MCP server
+        is broken.
+        """
+        import contextlib
+        from tools.session_tool_handler import SessionToolHandler
+        from fastmcp.exceptions import ToolError as McpToolError
+        import httpx
+
+        @contextlib.asynccontextmanager
+        async def fake_get_stream(endpoint):
+            raise httpx.RemoteProtocolError(
+                "peer closed connection without sending complete message body"
+            )
+            yield  # unreachable but required for generator
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_get_stream
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+        handler = SessionToolHandler(mock_client, gate=_PassGate())
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions()
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "ISE_UNREACHABLE"
+        assert data["retry"] is True
+
+    @pytest.mark.asyncio
+    async def test_read_timeout_over_tls_is_not_called_a_tls_failure(self):
+        """A slow MnT node is not a certificate problem.
+
+        Every read timeout on a TLS connection carries ssl.SSLWantReadError --
+        a benign "would block" marker, but an ssl.SSLError subclass -- in its
+        __context__ chain. Probing for a TLS error on anything other than a
+        ConnectError turns ordinary slowness into a non-retryable cert error.
+        """
+        import contextlib
+        from tools.session_tool_handler import SessionToolHandler
+        from fastmcp.exceptions import ToolError as McpToolError
+        import httpx
+        import ssl
+
+        @contextlib.asynccontextmanager
+        async def fake_get_stream(endpoint):
+            err = httpx.ReadTimeout("")
+            err.__context__ = ssl.SSLWantReadError(2, "The operation did not complete (read)")
+            raise err
+            yield  # unreachable but required for generator
+
+        mock_client = AsyncMock()
+        mock_client.get_stream = fake_get_stream
+
+        class _PassGate:
+            @contextlib.asynccontextmanager
+            async def guard(self):
+                yield
+        handler = SessionToolHandler(mock_client, gate=_PassGate())
+
+        with pytest.raises(McpToolError) as exc_info:
+            await handler.search_active_sessions()
+        data = json.loads(str(exc_info.value))
+        assert data["error_code"] == "ISE_UNREACHABLE"
+        assert data["retry"] is True
+
 
 class TestSessionToolHandlerSearchEnriched:
     """Tests for search_enriched_active_sessions with mocked MNT client."""
@@ -2158,8 +2231,13 @@ class TestNoSessionIsAnEmptyResult:
         assert result.total_matching_active_sessions == 0
 
     @pytest.mark.asyncio
-    async def test_other_500_still_raises_with_ise_detail(self):
-        """A real backend fault must NOT be reported as an absence of sessions."""
+    async def test_other_500_raises_without_leaking_ise_detail(self):
+        """A real backend fault must NOT be reported as an absence of sessions.
+
+        The cause is logged for the operator but kept out of the tool error:
+        <internal-error-info> names internal components and would otherwise be
+        copied verbatim into the model context.
+        """
         from fastmcp.exceptions import ToolError as McpToolError
 
         body = (
@@ -2174,7 +2252,32 @@ class TestNoSessionIsAnEmptyResult:
 
         data = json.loads(str(exc_info.value))
         assert data["error_code"] == "ISE_API_ERROR"
-        assert "Database connection refused" in data["message"]
+        assert "500" in data["message"]
+        assert data["retry"] is True
+        assert "Database connection refused" not in data["message"]
+
+    @pytest.mark.asyncio
+    async def test_ise_detail_is_logged_for_the_operator(self):
+        """The cause must still reach the log, capped, when it leaves the message."""
+        from unittest.mock import patch as _patch
+        from fastmcp.exceptions import ToolError as McpToolError
+
+        body = (
+            "<mnt-rest-result><http-code>500</http-code>"
+            "<internal-error-info>Database connection refused</internal-error-info>"
+            "</mnt-rest-result>"
+        )
+        handler, _ = _direct_handler(lambda ep: _http_500(body))
+
+        with _patch("tools.session_tool_handler.logger") as mock_logger:
+            with pytest.raises(McpToolError):
+                await handler.search_active_sessions(username="alice")
+
+        logged = [c for c in mock_logger.exception.call_args_list
+                  if c.args and c.args[0] == "ISE MNT API HTTP error"]
+        assert logged, "the HTTP failure was not logged"
+        assert logged[0].kwargs["mnt_detail"] == "Database connection refused"
+        assert logged[0].kwargs["status_code"] == 500
 
     @pytest.mark.asyncio
     async def test_unparseable_500_still_raises(self):

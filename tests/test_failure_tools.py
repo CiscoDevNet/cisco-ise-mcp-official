@@ -1117,8 +1117,12 @@ class TestFailureLookbackFallback:
         assert result.failures == []
 
     @pytest.mark.asyncio
-    async def test_real_backend_fault_surfaces_ise_detail(self):
-        """A genuine fault must not be reported as "no failures found"."""
+    async def test_real_backend_fault_raises_without_leaking_ise_detail(self):
+        """A genuine fault must not be reported as "no failures found".
+
+        The ISE cause is logged for the operator, not copied into the
+        agent-visible message.
+        """
         from fastmcp.exceptions import ToolError as McpToolError
 
         body = (
@@ -1133,7 +1137,8 @@ class TestFailureLookbackFallback:
 
         data = json.loads(str(exc_info.value))
         assert data["error_code"] == "ISE_API_ERROR"
-        assert "Database connection refused" in data["message"]
+        assert "500" in data["message"]
+        assert "Database connection refused" not in data["message"]
 
 
 class TestFailureToolDefaultLookback:
